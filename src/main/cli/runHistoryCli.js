@@ -3,6 +3,7 @@
 import path from "path";
 import fs from "fs";
 import { app } from "electron";
+import { writeCliJson, writeCliStdout } from "./cliStdout";
 
 function getPushDataDir() {
   const documents = app.getPath("documents");
@@ -122,12 +123,12 @@ export function runHistoryCli(options) {
   const limited = rows.slice(0, options.limit);
 
   if (options.json) {
-    console.log(JSON.stringify(limited, null, 2));
+    writeCliJson(limited);
     return 0;
   }
 
   if (limited.length === 0) {
-    console.log("（无匹配记录）数据目录：" + dir);
+    writeCliStdout("（无匹配记录）数据目录：" + dir);
     return 0;
   }
 
@@ -148,15 +149,15 @@ export function runHistoryCli(options) {
   );
   const pad = (s, w) => s + " ".repeat(Math.max(0, w - displayWidth(s)));
   const render = row => row.map((c, i) => pad(c, widths[i])).join("  ");
-  console.log(render(header));
-  console.log(widths.map(w => "-".repeat(w)).join("  "));
-  lines.forEach(r => console.log(render(r)));
+  writeCliStdout(render(header));
+  writeCliStdout(widths.map(w => "-".repeat(w)).join("  "));
+  lines.forEach(r => writeCliStdout(render(r)));
   const okN = rows.filter(r => r.status === "success").length;
   const failN = rows.filter(r => r.status === "failed").length;
   const pubN = rows.filter(r => r.status === "publishing").length;
   const scheduledN = rows.filter(r => r.status === "scheduled").length;
   const expiredN = rows.filter(r => r.status === "expired").length;
-  console.log(
+  writeCliStdout(
     `\n共 ${rows.length} 条记录，显示前 ${limited.length}：成功 ${okN} / 失败 ${failN} / 发布中 ${pubN} / 等待定时 ${scheduledN} / 任务过期 ${expiredN}`
   );
   return 0;

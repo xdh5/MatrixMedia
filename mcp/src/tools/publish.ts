@@ -133,7 +133,6 @@ export async function handlePublishVideo(
     throw new Error("file must be non-empty string");
   }
 
-  // Derive partition from phone + platform automatically
   const partition = derivePartition(phone, String(platform));
 
   let sphLinkArgs: string[] = [];
@@ -163,8 +162,12 @@ export async function handlePublishVideo(
     String(platform),
     "-f",
     file,
-    "-t",
+    "--title",
     String(title),
+    "--name",
+    String(title),
+    "--phone",
+    phone,
     "--partition",
     partition,
     ...(bt2 ? ["--bt2", String(bt2)] : []),

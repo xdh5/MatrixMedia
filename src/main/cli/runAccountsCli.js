@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { app, session } from "electron";
 import ptConfig from "../config/ptConfig";
+import { writeCliJson, writeCliStdout } from "./cliStdout";
 
 const LOGIN_COOKIE_RULE = {
   抖音: c => c.name === "passport_assist_user" && !!c.value,
@@ -107,12 +108,12 @@ export async function runAccountsCli(options) {
   }
 
   if (options.json) {
-    console.log(JSON.stringify(rows, null, 2));
+    writeCliJson(rows);
     return 0;
   }
 
   if (rows.length === 0) {
-    console.log("（无匹配账号）数据目录：" + getAccountsDir());
+    writeCliStdout("（无匹配账号）数据目录：" + getAccountsDir());
     return 0;
   }
 
@@ -129,11 +130,11 @@ export async function runAccountsCli(options) {
   );
   const pad = (s, w) => s + " ".repeat(Math.max(0, w - displayWidth(s)));
   const render = row => row.map((c, i) => pad(c, widths[i])).join("  ");
-  console.log(render(header));
-  console.log(widths.map(w => "-".repeat(w)).join("  "));
-  lines.forEach(r => console.log(render(r)));
+  writeCliStdout(render(header));
+  writeCliStdout(widths.map(w => "-".repeat(w)).join("  "));
+  lines.forEach(r => writeCliStdout(render(r)));
   const ok = rows.filter(r => r.loggedIn).length;
-  console.log(`\n共 ${rows.length} 个账号，已登录 ${ok}，未登录 ${rows.length - ok}`);
+  writeCliStdout(`\n共 ${rows.length} 个账号，已登录 ${ok}，未登录 ${rows.length - ok}`);
   return 0;
 }
 

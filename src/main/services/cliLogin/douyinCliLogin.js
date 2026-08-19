@@ -67,10 +67,11 @@ export async function runDouyinCliLogin({
       "提示: stdout 非 TTY，无法绘制终端二维码方块图。可改用 --puppeteer-headless、--save-qr-png，或在有显示环境用 xvfb-run 等。"
     );
   }
-  if (!useTerminalQr && !show) {
-    console.error("错误: 当前环境无法使用终端二维码且未指定 --show，无法继续登录。");
+  if (!useTerminalQr && !show && !saveQrPngPath) {
+    console.error("错误: 当前环境无法使用终端二维码，且未指定 --show 或 --save-qr-png，无法继续登录。");
     return 2;
   }
+  const visibleWin = Boolean(show) && !saveQrPngPath;
 
   return await new Promise(resolve => {
     let settled = false;
@@ -149,17 +150,17 @@ export async function runDouyinCliLogin({
       win = new BrowserWindow({
         width: winWidth,
         height: winHeight,
-        show: Boolean(show),
+        show: visibleWin,
         paintWhenInitiallyHidden: true,
         autoHideMenuBar: true,
         skipTaskbar: true,
-        focusable: Boolean(show),
+        focusable: visibleWin,
         hasShadow: false,
         webPreferences: {
           partition: part,
           nodeIntegration: false,
           contextIsolation: true,
-          devTools: Boolean(show),
+          devTools: visibleWin,
           backgroundThrottling: false,
         },
       });
@@ -191,22 +192,23 @@ export async function runDouyinCliLogin({
         return;
       }
 
-      if (show) {
+      if (visibleWin) {
         win.show();
         win.focus();
       }
 
       const paintOpts = { partitionLabel: part, saveQrPngPath };
+      const shouldPaintQr = useTerminalQr || Boolean(saveQrPngPath);
 
-      if (useTerminalQr) {
+      if (shouldPaintQr) {
         console.log(
-          "正在加载抖音登录页，随后在终端刷新黑白方块扫码图（每 " +
+          "正在加载抖音登录页，随后刷新扫码图（每 " +
             CLI_LOGIN_QR_REFRESH_MS / 1000 +
             "s，Electron CDP）… partition:",
           part
         );
         if (saveQrPngPath) {
-          console.log("同时将截取区域写入 PNG:", saveQrPngPath);
+          console.log("二维码将写入 PNG:", saveQrPngPath);
         }
         qrTimer = setInterval(() => {
           if (settled || !piePage) return;
@@ -217,7 +219,7 @@ export async function runDouyinCliLogin({
             paintLoginQrToTerminalFromPuppeteerPage(piePage, paintOpts).catch(() => {});
           }
         }, CLI_LOGIN_QR_FIRST_DELAY_MS);
-      } else if (show) {
+      } else if (visibleWin) {
         console.log("请在浏览器窗口中完成抖音登录。partition:", part);
       }
 

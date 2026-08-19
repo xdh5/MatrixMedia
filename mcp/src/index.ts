@@ -8,6 +8,13 @@ import { listAccountsTool, handleListAccounts } from './tools/accounts.js';
 import { listHistoryTool, handleListHistory } from './tools/history.js';
 import { publishArticleTool, handlePublishArticle } from './tools/publishArticle.js';
 import { publishVideoTool, handlePublishVideo } from './tools/publish.js';
+import {
+  loginTool,
+  loginStatusTool,
+  handleLogin,
+  handleLoginStatus,
+  type McpContent,
+} from './tools/login.js';
 
 const server = new Server(
   { name: 'matrixmedia', version: '0.1.0' },
@@ -15,42 +22,60 @@ const server = new Server(
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return { tools: [listAccountsTool, listHistoryTool, publishVideoTool, publishArticleTool] };
+  return {
+    tools: [
+      listAccountsTool,
+      listHistoryTool,
+      loginTool,
+      loginStatusTool,
+      publishVideoTool,
+      publishArticleTool,
+    ],
+  };
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const name = request.params.name;
   const args: Record<string, unknown> = request.params.arguments ?? {};
   try {
-    let result: string;
+    let content: McpContent[];
     switch (name) {
       case 'list_accounts':
-        result = await handleListAccounts(args);
+        content = [{ type: 'text', text: await handleListAccounts(args) }];
         break;
       case 'list_history':
-        result = await handleListHistory(args);
+        content = [{ type: 'text', text: await handleListHistory(args) }];
+        break;
+      case 'login':
+        content = await handleLogin(args);
+        break;
+      case 'login_status':
+        content = await handleLoginStatus(args);
         break;
       case 'publish_video': {
         const progressToken = (request.params as any)._meta?.progressToken as string | undefined;
-        result = await handlePublishVideo(args,
-          progressToken
-            ? (elapsed: number) => {
-                server.notification({
-                  method: 'notifications/progress',
-                  params: { progressToken, progress: Math.floor(elapsed / 1000), total: 2100 },
-                });
-              }
-            : undefined
-        );
+        content = [{
+          type: 'text',
+          text: await handlePublishVideo(args,
+            progressToken
+              ? (elapsed: number) => {
+                  server.notification({
+                    method: 'notifications/progress',
+                    params: { progressToken, progress: Math.floor(elapsed / 1000), total: 2100 },
+                  });
+                }
+              : undefined
+          ),
+        }];
         break;
       }
       case 'publish_article':
-        result = await handlePublishArticle(args);
+        content = [{ type: 'text', text: await handlePublishArticle(args) }];
         break;
       default:
         throw new Error('Unknown tool: ' + name);
     }
-    return { content: [{ type: 'text', text: result }] };
+    return { content };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return {

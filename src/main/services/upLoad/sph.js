@@ -161,6 +161,57 @@ async function clickSphPublishButton(page) {
   await page.waitForTimeout(1000);
 }
 
+const SEL_SPH_FILE_INPUT = 'wujie-app.wujie_iframe >>> input[type="file"]';
+
+/**
+ * 上传框在 shadow DOM 内且挂载时机不稳，setFileInputFiles 可能落在随后被重建的 input 上：
+ * 页面看不到视频却不报错，后续等待「删除」标签会白等到超时。这里重取 input 并确认页面
+ * 真的进入上传态再继续。
+ */
+async function ensureSphFileSelected(page, filePath, attempts = 3) {
+  const uploadStarted = () =>
+    page
+      .evaluate(() => {
+        const app = document.querySelector("wujie-app.wujie_iframe");
+        const root = app && app.shadowRoot;
+        if (!root) return false;
+        const input = root.querySelector('input[type="file"]');
+        if (input && input.files && input.files.length) return true;
+        if (root.querySelector("video")) return true;
+        const wrap = root.querySelector(".upload-content, .ant-upload-drag");
+        return !!(wrap && !/上传时长/.test(wrap.textContent || ""));
+      })
+      .catch(() => false);
+
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const input = await page.waitForSelector(SEL_SPH_FILE_INPUT, {
+        timeout: WAIT_SELECTOR_APPEAR_MS,
+      });
+      if (!input) throw new Error("上传 input 不存在");
+      await input.uploadFile(filePath);
+      await input.evaluate((el) => {
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    } catch (err) {
+      lastError = err;
+    }
+
+    for (let i = 0; i < 10; i += 1) {
+      await page.waitForTimeout(2000);
+      if (await uploadStarted()) return;
+    }
+    console.warn(`视频号选择视频第 ${attempt} 次未生效，重试`);
+  }
+
+  throw new Error(
+    `视频号选择视频文件失败：${
+      (lastError && lastError.message) || "页面未进入上传状态"
+    }`
+  );
+}
+
 async function waitSphUploadProcessing(page) {
   await pollPageUntil(
     page,
@@ -213,18 +264,17 @@ export default async function (page, data, window, event, onFinish) {
   console.log(data);
   await page.waitForTimeout(1000 * 5);
   try {
-    const sel = 'wujie-app.wujie_iframe >>> input[type="file"]';
-
-    const uploadInput = await page.waitForSelector(sel, {
-      timeout: WAIT_SELECTOR_APPEAR_MS,
-    });
-    if (!uploadInput) throw new Error("上传 input 不存在");
-    await uploadInput.uploadFile(path.resolve(data.filePath));
-    await uploadInput.evaluate((el) => {
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await ensureSphFileSelected(page, path.resolve(data.filePath));
   } catch (err) {
+    const detail = (err && err.message) || String(err || "上传失败");
     console.error("❌ 文件上传失败:", err);
+    event.reply("puppeteerFile-done", {
+      ...data,
+      status: false,
+      message: detail,
+    });
+    maybeClosePublishWindow(data, window);
+    return;
   }
 
   try {
@@ -235,7 +285,8 @@ export default async function (page, data, window, event, onFinish) {
     // 传统input/textarea的操作
     await titleInput.click();
     await page.keyboard.type(data.data.bt1 + " " + data.data.bq, { delay: 50 });
-    const shortTitle = (data.data.bt2Filled || "").trim();
+    // CLI / MCP 走 bt2，GUI 走 bt2Filled，两边都要能填上视频号必填的短标题
+    const shortTitle = (data.data.bt2Filled || data.data.bt2 || "").trim();
     if (shortTitle) {
       const sel2 =
         'wujie-app.wujie_iframe >>> input[placeholder="填写短标题有机会获得更多流量"]';

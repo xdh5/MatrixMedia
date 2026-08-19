@@ -56,6 +56,8 @@ cd mcp && npm install && npm run build
 | ----------------- | ------------------------- | ---------------------------------------------- |
 | `list_accounts`   | `cli accounts --json`     | 列出本机已登录账号，支持按平台过滤             |
 | `list_history`    | `cli history --json`      | 查询本机发布记录，支持按平台/状态/天数过滤     |
+| `login`           | `cli login --save-qr-png` | 截取抖音/视频号登录二维码，返回图片给 Agent    |
+| `login_status`    | 查询进行中的 `cli login`  | 等待用户扫码，直到登录成功                     |
 | `publish_video`   | `cli publish ...`         | 发布视频（最长约 35 分钟，支持草稿和定时发布） |
 | `publish_article` | `cli publish-article ...` | 发布掘金文章（需已登录掘金账号）               |
 
@@ -73,6 +75,24 @@ cd mcp && npm install && npm run build
 | `platform` | 否   | 平台过滤                                          |
 | `status`   | 否   | `success` / `failed` / `publishing` / `scheduled` |
 | `all`      | 否   | 为 `true` 时返回全部历史                          |
+
+### login
+
+| 参数         | 必填 | 说明                                      |
+| ------------ | ---- | ----------------------------------------- |
+| `platform`   | 是   | 仅 `dy` / `sph`                           |
+| `phone`      | 是   | 与 `list_accounts` / `publish_video` 一致 |
+| `timeoutSec` | 否   | 等待扫码秒数，默认 900                    |
+
+返回二维码图片 + JSON（`status=waiting_scan` 时带 `login_id`）。Agent 必须把图片发给用户扫码。
+
+### login_status
+
+| 参数       | 必填 | 说明                    |
+| ---------- | ---- | ----------------------- |
+| `login_id` | 是   | `login` 返回的 `login_id` |
+
+`waiting_scan` 时可能附带最新二维码；`success` 后即可发布。
 
 ### publish_video
 
@@ -127,9 +147,10 @@ cd mcp && npm install && npm run build
 
 ## 登录说明
 
-- 所有平台均需在 **GUI 中完成登录**后再通过 MCP 发布（`publish_video` / `publish_article`）。
-- MCP 运行在无头 stdio 环境，**无法弹出扫码窗口**。
-- 抖音 / 视频号可通过 CLI `cli login` 在终端完成扫码，MCP 会复用同一 session partition。
+- 发布前用 `list_accounts` 看登录态。
+- **抖音 / 视频号未登录**：调用 `login(platform, phone)`。工具会打开登录页、截取二维码，并以图片返回。Agent 必须把这张图发给用户扫码，然后反复调用 `login_status(login_id)`，直到 `status=success`，再 `publish_video`。
+- **其它平台未登录**：请用户在矩媒 GUI 扫码登录；MCP 无法弹窗。
+- `login` 与 GUI / `publish_video` 共用同一 session partition。
 
 ## 相关文档
 

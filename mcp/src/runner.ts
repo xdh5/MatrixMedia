@@ -1,4 +1,5 @@
-import { spawn, execSync } from 'node:child_process';
+import { spawn, execSync, type ChildProcess } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,6 +12,7 @@ export interface CliResult {
 
 const VERSION_NOISE = /^\d+\.\d+\.\d+/;
 const DEVTOOLS_NOISE = /^DevTools listening/;
+const LOG_PREFIX = /^\[[^\]]+\] \[(?:LOG|INFO|WARN|ERROR|DEBUG)\] /;
 const TIMEOUT_MS = 2400000;
 
 function isNoiseLine(line: string): boolean {
@@ -18,12 +20,76 @@ function isNoiseLine(line: string): boolean {
   return VERSION_NOISE.test(trimmed) || DEVTOOLS_NOISE.test(trimmed);
 }
 
+function stripLogPrefix(line: string): string {
+  return line.replace(LOG_PREFIX, '');
+}
+
 function stripNoiseLines(raw: string): string {
   return raw
     .split('\n')
-    .filter(line => !isNoiseLine(line))
+    .map((line) => stripLogPrefix(line))
+    .filter((line) => !isNoiseLine(line.trim()))
     .join('\n')
     .trim();
+}
+
+function tryParseJson(raw: string): unknown | null {
+  const cleaned = stripNoiseLines(raw);
+  if (cleaned.length === 0) return null;
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    /* continue */
+  }
+  const starts = [cleaned.indexOf('['), cleaned.indexOf('{')].filter((index) => index >= 0);
+  if (starts.length === 0) return null;
+  const slice = cleaned.slice(Math.min(...starts));
+  try {
+    return JSON.parse(slice);
+  } catch {
+    return null;
+  }
+}
+
+function todayLogName(): string {
+  const date = new Date();
+  const yyyy = String(date.getFullYear());
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}.log`;
+}
+
+function readElectronLogFile(): string {
+  const appData = process.env.APPDATA || '';
+  if (!appData) return '';
+  const logPath = path.join(appData, 'matrix-video', 'logs', todayLogName());
+  try {
+    return fs.readFileSync(logPath, 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+export function extractCliJson(stdout: string, stderr: string): unknown | null {
+  const fromStdio = tryParseJson(stdout) ?? tryParseJson(stderr);
+  if (fromStdio != null) return fromStdio;
+  const logText = readElectronLogFile();
+  const fromLog = tryParseJson(logText);
+  if (fromLog != null) return fromLog;
+  const chunks = logText.split(/(?=^\[[^\]]+\] \[(?:LOG|INFO|WARN|ERROR|DEBUG)\] )/m);
+  let found: unknown | null = null;
+  for (const chunk of chunks) {
+    const parsed = tryParseJson(chunk);
+    if (
+      Array.isArray(parsed) &&
+      parsed.every(
+        (item) => item && typeof item === 'object' && 'phone' in item && 'pt' in item
+      )
+    ) {
+      if (parsed.length > 0 || found == null) found = parsed;
+    }
+  }
+  return found;
 }
 
 export interface RunCliOptions {
@@ -31,17 +97,17 @@ export interface RunCliOptions {
   progressIntervalMs?: number; // default 30000
 }
 
-export async function runCli(args: string[], opts?: RunCliOptions): Promise<CliResult> {
-  // Resolve project dir: env var takes priority, then infer from this file's location
-  // mcp/src/runner.ts -> mcp/ -> project root
+export function resolveCliSpawn(args: string[]): {
+  command: string;
+  spawnArgs: string[];
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+} {
   const defaultDir = path.resolve(
     fileURLToPath(import.meta.url),
     '..', '..', '..'
   );
   const dir = process.env.MATRIXMEDIA_DIR ?? defaultDir;
-
-  let command: string;
-  let spawnArgs: string[];
   const env: NodeJS.ProcessEnv = { ...process.env };
 
   let installed = false;
@@ -53,17 +119,41 @@ export async function runCli(args: string[], opts?: RunCliOptions): Promise<CliR
   }
 
   if (installed) {
-    command = 'matrixmedia';
-    spawnArgs = ['cli', ...args];
-  } else {
-    command = path.join(dir, 'node_modules/.bin/electron');
-    spawnArgs = ['.', 'cli', ...args];
-    env.ELECTRON_RUN_AS_NODE = '';
+    return { command: 'matrixmedia', spawnArgs: ['cli', ...args], cwd: dir, env };
   }
+  delete env.ELECTRON_RUN_AS_NODE;
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase() === 'ELECTRON_RUN_AS_NODE') {
+      delete env[key];
+    }
+  }
+  const electronBin = process.platform === 'win32'
+    ? path.join(dir, 'node_modules', 'electron', 'dist', 'electron.exe')
+    : path.join(dir, 'node_modules', '.bin', 'electron');
+  return {
+    command: electronBin,
+    // `--` 防止 Chromium 把 --partition / --tags 等 CLI 参数当成浏览器开关并直接崩溃
+    spawnArgs: ['.', '--', 'cli', ...args],
+    cwd: dir,
+    env,
+  };
+}
+
+export function spawnCli(args: string[]): ChildProcess {
+  const { command, spawnArgs, cwd, env } = resolveCliSpawn(args);
+  return spawn(command, spawnArgs, {
+    cwd,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+export async function runCli(args: string[], opts?: RunCliOptions): Promise<CliResult> {
+  const { command, spawnArgs, cwd, env } = resolveCliSpawn(args);
 
   return new Promise<CliResult>((resolve) => {
     const child = spawn(command, spawnArgs, {
-      cwd: dir,
+      cwd,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -95,7 +185,7 @@ export async function runCli(args: string[], opts?: RunCliOptions): Promise<CliR
     }, TIMEOUT_MS);
 
     const processLine = (line: string): void => {
-      const trimmed = line.trim();
+      const trimmed = stripLogPrefix(line).trim();
       if (trimmed.length === 0) return;
       if (isNoiseLine(trimmed)) return;
       try {
@@ -164,6 +254,10 @@ export async function runCli(args: string[], opts?: RunCliOptions): Promise<CliR
         stdoutBuf = '';
       }
       processFullOutput(stdoutRaw);
+      if (lastJson == null) {
+        lastJson = extractCliJson(stdoutRaw, stderr);
+        if (lastJson != null) jsonLines.push(lastJson);
+      }
       resolve({
         exitCode: typeof code === 'number' ? code : 1,
         jsonLines,

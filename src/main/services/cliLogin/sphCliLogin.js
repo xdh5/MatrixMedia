@@ -360,12 +360,14 @@ export async function runSphCliLogin({
       "提示: stdout 非 TTY，无法绘制终端二维码方块图。可改用 --save-qr-png，或在有显示环境用 xvfb-run 等。"
     );
   }
-  if (!useTerminalQr && !show) {
+  if (!useTerminalQr && !show && !saveQrPngPath) {
     console.error(
-      "错误: 当前环境无法使用终端二维码且未指定 --show，无法继续登录。"
+      "错误: 当前环境无法使用终端二维码，且未指定 --show 或 --save-qr-png，无法继续登录。"
     );
     return 2;
   }
+  // MCP 等非 TTY 环境会同时传 --show 和 --save-qr-png：有保存路径时不弹窗，只把二维码写成 PNG
+  const visibleWin = Boolean(show) && !saveQrPngPath;
 
   /** @type {import("puppeteer").Browser | null} */
   let pieBrowser = null;
@@ -440,7 +442,7 @@ export async function runSphCliLogin({
       win = new BrowserWindow({
         width: 1200,
         height: 800,
-        opacity: show ? 1 : 0,
+        opacity: visibleWin ? 1 : 0,
         title: `视频号登录 ${part}`,
         autoHideMenuBar: true,
         webPreferences: {
@@ -502,21 +504,22 @@ export async function runSphCliLogin({
       // 等待重定向后的登录页 + iframe 加载完成
       await new Promise((r) => setTimeout(r, 8000));
 
-      if (show) {
+      if (visibleWin) {
         win.focus();
       }
 
       const paintOpts = { partitionLabel: part, saveQrPngPath };
+      const shouldPaintQr = useTerminalQr || Boolean(saveQrPngPath);
 
-      if (useTerminalQr) {
+      if (shouldPaintQr) {
         console.log(
-          "正在加载视频号登录页，随后在终端刷新扫码图（每 " +
+          "正在加载视频号登录页，随后刷新扫码图（每 " +
             CLI_LOGIN_QR_REFRESH_MS / 1000 +
             "s）… partition:",
           part
         );
         if (saveQrPngPath) {
-          console.log("同时将截取区域写入 PNG:", saveQrPngPath);
+          console.log("二维码将写入 PNG:", saveQrPngPath);
         }
         qrTimer = setInterval(() => {
           if (settled || !piePage) return;
@@ -528,7 +531,7 @@ export async function runSphCliLogin({
             paintSphLoginQr(piePage, paintOpts).catch(() => {});
           }
         }, CLI_LOGIN_QR_FIRST_DELAY_MS);
-      } else if (show) {
+      } else if (visibleWin) {
         console.log("请在浏览器窗口中完成视频号登录。partition:", part);
       }
 

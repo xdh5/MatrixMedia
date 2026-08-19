@@ -54,7 +54,13 @@ export async function handleListHistory(
 
   const result = await runCli(cliArgs);
   if (result.exitCode === 0) {
-    return JSON.stringify(result.lastJson ?? result.jsonLines);
+    if (result.lastJson == null) {
+      throw new Error(
+        'list_history 没有从 stdout 读到记录 JSON。矩媒可能把结果写进了主进程日志。请重新编译 Electron 主进程后再试。' +
+          (result.stderr ? ` stderr: ${result.stderr.slice(0, 400)}` : '')
+      );
+    }
+    return JSON.stringify(result.lastJson);
   }
   throw new Error(
     'list_history failed (exit ' + String(result.exitCode) + '): ' + result.stderr

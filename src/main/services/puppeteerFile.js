@@ -528,11 +528,15 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
         width: data?.width ?? 1300,
         height: data?.height ?? 800,
         title: `${data.partition} (尝试${currentAttempt}/${maxRetries})`,
+        // 隐藏窗口默认不绘制且会被节流，视频号要先在本地 <video> 解码取时长才会真正上传，
+        // 不加这两项会一直停在 readyState 0，页面永远不出现「删除」标签。
+        paintWhenInitiallyHidden: true,
         webPreferences: {
           partition: data.partition,
           nodeIntegration: false,
           contextIsolation: true,
           devTools: true,
+          backgroundThrottling: false,
         },
       });
       activeWin = win;

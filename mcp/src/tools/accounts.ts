@@ -33,7 +33,13 @@ export async function handleListAccounts(
 
   const result = await runCli(cliArgs);
   if (result.exitCode === 0) {
-    return JSON.stringify(result.lastJson ?? result.jsonLines);
+    if (result.lastJson == null) {
+      throw new Error(
+        'list_accounts 没有从 stdout 读到账号 JSON。矩媒可能把结果写进了主进程日志。请重新编译 Electron 主进程后再试。' +
+          (result.stderr ? ` stderr: ${result.stderr.slice(0, 400)}` : '')
+      );
+    }
+    return JSON.stringify(result.lastJson);
   }
   throw new Error(
     'list_accounts failed (exit ' + String(result.exitCode) + '): ' + result.stderr
