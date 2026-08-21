@@ -22,8 +22,9 @@ export const publishVideoTool: Tool = {
   name: "publish_video",
   description:
     "Publish a video to a target platform via MatrixMedia. Requires a logged-in account " +
-    "identified by phone number. Partition is derived automatically. Long-running -- emits " +
-    "progress notifications when a progressToken is supplied by the client.",
+    "identified by phone number. Partition is derived automatically. " +
+    "视频号 platform=sph 必须传 bt2（6～16字短标题，财经用成片 short_title / publish_bt2），禁止把长标题填进短标题。 " +
+    "Long-running -- emits progress notifications when a progressToken is supplied by the client.",
   inputSchema: {
     type: "object",
     properties: {
@@ -48,7 +49,8 @@ export const publishVideoTool: Tool = {
       },
       bt2: {
         type: "string",
-        description: "Optional secondary title / 第二标题.",
+        description:
+          "短标题。视频号必填，6～16字，不要标点；财经成片传 short_title。禁止用长标题凑数。",
       },
       tags: {
         type: "string",
@@ -133,6 +135,19 @@ export async function handlePublishVideo(
     throw new Error("file must be non-empty string");
   }
 
+  const shortTitle = bt2 == null ? "" : String(bt2).trim();
+  if (String(platform) === "sph") {
+    const length = [...shortTitle].length;
+    if (!shortTitle) {
+      throw new Error(
+        "视频号必须传 bt2（6～16字短标题）。财经用成片返回的 short_title / publish_bt2，不要把长标题 title 填进短标题框。"
+      );
+    }
+    if (length < 6 || length > 16) {
+      throw new Error(`视频号 bt2 须为 6～16 字，当前 ${length} 字：${shortTitle}`);
+    }
+  }
+
   const partition = derivePartition(phone, String(platform));
 
   let sphLinkArgs: string[] = [];
@@ -170,7 +185,7 @@ export async function handlePublishVideo(
     phone,
     "--partition",
     partition,
-    ...(bt2 ? ["--bt2", String(bt2)] : []),
+    ...(shortTitle ? ["--bt2", shortTitle] : []),
     ...(tags ? ["--tags", String(tags)] : []),
     ...(address ? ["--address", String(address)] : []),
     ...(publishAt ? ["--publish-at", String(publishAt)] : []),
