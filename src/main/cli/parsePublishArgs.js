@@ -187,11 +187,15 @@ export function parsePublishArgs(subArgv) {
   }
   // in dir mode title comes from xlsx per row, no global --title needed
 
-  if (out.show) {
+  if (out.show && out.platform !== "视频号") {
     console.warn(
-      "MatrixMedia: CLI publish 不显示浏览器窗口，已忽略 --show（--no-close-window 仅在与 GUI 显示窗口时有关，CLI 下无效）。"
+      "MatrixMedia: 当前仅视频号 CLI publish 支持显示浏览器窗口，已忽略 --show。"
     );
     out.show = false;
+  }
+  if (out.show && out.platform === "视频号") {
+    // 可见模式用于排查平台二次确认和校验提示，任务结束后保留现场。
+    out.closeWindowAfterPublish = false;
   }
 
   if (out.platform === "视频号") {
@@ -581,8 +585,8 @@ export function publishHelpText() {
                             • 百家号/头条：当前代码不消费 bq，无需填。
       --publish-at <t>  一次性定时发布，格式 "YYYY-MM-DD HH:mm:ss"。创建后立即写入发布历史，
                             到点后由应用主进程调度执行；不支持每日/每周/每月循环。
-      --show            （已忽略）CLI 不显示自动化窗口
-      --no-close-window 发布后不自动关窗（仅 GUI 显示窗口时有效；CLI 始终后台运行）
+      --show            显示视频号自动化窗口；其它平台暂时忽略
+      --no-close-window 发布后不自动关窗（与视频号 --show 一起使用）
       --draft           显式发布到草稿箱（小红书点「暂存离开」）。若账号在 GUI「媒体平台管理」
                             里开启了「默认发布到草稿」，即使不加该参数也会自动走草稿。
       --sph-product-id <id>   视频号商品上架（快捷参数，等价于 product + 商品编号）

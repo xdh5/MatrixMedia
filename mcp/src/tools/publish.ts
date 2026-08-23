@@ -1,6 +1,16 @@
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { runCli } from "../runner.js";
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
+}
+
+function isPuppeteerDoneResult(
+  value: unknown
+): value is Record<string, unknown> {
+  return isObject(value) && value.channel === "puppeteerFile-done";
+}
+
 // Maps short platform codes to Chinese names used in session partition strings
 const PLATFORM_CN: Record<string, string> = {
   dy: "抖音",
@@ -63,7 +73,7 @@ export const publishVideoTool: Tool = {
       publishAt: {
         type: "string",
         description:
-          'Optional scheduled publish time, format "YYYY-MM-DD HH:mm".',
+          '可选定时发布时间，格式为 "YYYY-MM-DD HH:mm:ss"。',
       },
       show: {
         type: "boolean",
@@ -211,10 +221,17 @@ export async function handlePublishVideo(
         message: (lastJson as any).message,
       });
     }
+
+    if (!isPuppeteerDoneResult(lastJson)) {
+      throw new Error("CLI 未返回最终发布结果（缺少 puppeteerFile-done）");
+    }
+    if (lastJson.status !== true) {
+      throw new Error(String(lastJson.message || "视频发布失败"));
+    }
     return JSON.stringify({
-      status: (result.lastJson as any)?.resultStatus ?? "success",
-      publishMode: (result.lastJson as any)?.publishMode,
-      message: (result.lastJson as any)?.message ?? "上传成功",
+      status: lastJson.resultStatus ?? "success",
+      publishMode: lastJson.publishMode,
+      message: lastJson.message ?? "发布成功",
     });
   }
 

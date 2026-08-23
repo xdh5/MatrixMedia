@@ -142,23 +142,173 @@ async function applySphCreativeStatement(page, value) {
 }
 
 async function clickSphDraftButton(page) {
-  const draftBtn = await page.waitForSelector(
-    "wujie-app.wujie_iframe >>> .form-btns>div:first-child button",
-    { timeout: WAIT_SELECTOR_APPEAR_MS }
-  );
-  if (!draftBtn) throw new Error("未找到视频号保存草稿按钮");
-  await draftBtn.click({ delay: 200 });
+  await clickSphFormButton(page, "保存草稿", "draft");
   await page.waitForTimeout(1000);
 }
 
 async function clickSphPublishButton(page) {
-  const publishBtn = await page.waitForSelector(
-    "wujie-app.wujie_iframe >>> .form-btns>div:last-child button",
-    { timeout: WAIT_SELECTOR_APPEAR_MS }
+  await clickSphFormButton(page, "发布", "publish");
+  await waitSphPublishConfirmed(page);
+}
+
+/**
+ * 点击不等于平台接收。必须等到成功提示或离开创建页，才能向 CLI / MCP 回报成功。
+ * 同时记录可见提示和按钮，方便定位二次确认、字段校验或平台拦截。
+ */
+async function waitSphPublishConfirmed(page) {
+  const deadline = Date.now() + 60 * 1000;
+  let lastSnapshot = null;
+  while (Date.now() < deadline) {
+    const snapshot = await page
+      .evaluate(() => {
+        const app = document.querySelector("wujie-app.wujie_iframe");
+        const root = app && app.shadowRoot;
+        const isVisible = (node) => {
+          const style = window.getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return (
+            node.isConnected &&
+            style.display !== "none" &&
+            style.visibility !== "hidden" &&
+            rect.width > 0 &&
+            rect.height > 0
+          );
+        };
+        const nodes = root
+          ? Array.from(root.querySelectorAll("div,span,p,button,[role='alert'],[role='dialog']"))
+          : [];
+        const texts = Array.from(
+          new Set(
+            nodes
+              .filter(isVisible)
+              .map((node) => String(node.textContent || "").replace(/\s+/g, " ").trim())
+              .filter((text) => text && text.length <= 120)
+          )
+        );
+        const importantTexts = texts.filter((text) =>
+          /成功|失败|错误|请|不能|无法|确认|发表|发布|审核|违规|重试/.test(text)
+        );
+        const buttons = nodes
+          .filter((node) => node.matches("button,[role='button']") && isVisible(node))
+          .map((node) => ({
+            text: String(node.textContent || "").replace(/\s+/g, "").trim(),
+            disabled:
+              Boolean(node.disabled) || node.getAttribute("aria-disabled") === "true",
+          }));
+        return {
+          url: location.href,
+          importantTexts: importantTexts.slice(-30),
+          buttons: buttons.slice(-20),
+        };
+      })
+      .catch((error) => ({
+        url: "",
+        importantTexts: [],
+        buttons: [],
+        inspectError: error && error.message ? error.message : String(error),
+      }));
+    lastSnapshot = snapshot;
+
+    const url = String(snapshot.url || "");
+    const joined = (snapshot.importantTexts || []).join(" | ");
+    if (url && !/\/post\/create(?:[/?#]|$)/.test(url)) {
+      console.log(`[sph] 平台已离开创建页：${url}`);
+      return;
+    }
+    if (/发表成功|发布成功|提交成功|已发表|已发布/.test(joined)) {
+      console.log(`[sph] 平台确认发布成功：${joined}`);
+      return;
+    }
+    if (/发布失败|发表失败|提交失败|发布错误|网络错误|请重试|无法发布|不能发布/.test(joined)) {
+      throw new Error(`视频号平台拒绝发布：${joined}`);
+    }
+
+    console.log(`[sph][publish-wait] ${JSON.stringify(snapshot)}`);
+    await page.waitForTimeout(2000);
+  }
+  throw new Error(
+    `点击发表后未收到视频号成功确认：${JSON.stringify(lastSnapshot || {})}`
   );
-  if (!publishBtn) throw new Error("未找到视频号发布按钮");
-  await publishBtn.click({ delay: 200 });
-  await page.waitForTimeout(1000);
+}
+
+/**
+ * 视频号发布页会在上传处理完成后重建底部按钮。Puppeteer 的 ElementHandle
+ * 容易指向已失效或隐藏的旧节点，因此在 shadow DOM 内重新定位可见按钮并原生点击。
+ */
+async function clickSphFormButton(page, label, action) {
+  const deadline = Date.now() + WAIT_SELECTOR_APPEAR_MS;
+  let lastSnapshot = null;
+  while (Date.now() < deadline) {
+    const result = await page
+      .evaluate((expectedAction) => {
+        const app = document.querySelector("wujie-app.wujie_iframe");
+        const root = app && app.shadowRoot;
+        if (!root) return { ok: false, reason: "shadow-root-missing" };
+
+        const form = root.querySelector(".form-btns");
+        if (!form) return { ok: false, reason: "form-buttons-missing" };
+
+        const pageText = String(root.textContent || "").replace(/\s+/g, " ");
+        if (/文件上传中|正在上传|上传中，请等待|视频处理中|正在处理/.test(pageText)) {
+          return { ok: false, reason: "video-still-uploading" };
+        }
+
+        // 视频号按钮文字可能由子组件或伪元素渲染，不能依赖 textContent。
+        // 发布固定为最后一组，草稿固定为第一组；每轮都在页面内重新取节点并原生点击，
+        // 避免上传完成重建 DOM 后 ElementHandle 指向旧节点。
+        const groupSelector =
+          expectedAction === "draft" ? ":scope > div:first-child" : ":scope > div:last-child";
+        const group = form.querySelector(groupSelector);
+        const target = group && group.querySelector("button,[role='button']");
+        const buttons = Array.from(form.querySelectorAll("button,[role='button']"));
+        const snapshot = buttons.map((button, index) => {
+          const style = window.getComputedStyle(button);
+          const rect = button.getBoundingClientRect();
+          return {
+            index,
+            text: String(button.textContent || "").replace(/\s+/g, "").trim(),
+            disabled: Boolean(button.disabled),
+            ariaDisabled: button.getAttribute("aria-disabled"),
+            display: style.display,
+            visibility: style.visibility,
+            pointerEvents: style.pointerEvents,
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+          };
+        });
+        if (!target) {
+          return { ok: false, reason: "target-missing", snapshot };
+        }
+        if (
+          !target.isConnected ||
+          target.disabled ||
+          target.getAttribute("aria-disabled") === "true"
+        ) {
+          return { ok: false, reason: "target-disabled", snapshot };
+        }
+
+        target.scrollIntoView({ block: "center", inline: "center" });
+        target.click();
+        return {
+          ok: true,
+          text: String(target.textContent || "").replace(/\s+/g, "").trim(),
+          snapshot,
+        };
+      }, action)
+      .catch((error) => ({
+        ok: false,
+        reason: error && error.message ? error.message : String(error),
+      }));
+    lastSnapshot = result;
+    if (result && result.ok === true) {
+      console.log(`[sph] 已点击${label}按钮：${result.text || label}`);
+      return;
+    }
+    await page.waitForTimeout(500);
+  }
+  throw new Error(
+    `等待视频号${label}按钮可点击超时：${JSON.stringify(lastSnapshot || {})}`
+  );
 }
 
 const SEL_SPH_FILE_INPUT = 'wujie-app.wujie_iframe >>> input[type="file"]';
@@ -169,18 +319,38 @@ const SEL_SPH_FILE_INPUT = 'wujie-app.wujie_iframe >>> input[type="file"]';
  * 真的进入上传态再继续。
  */
 async function ensureSphFileSelected(page, filePath, attempts = 3) {
+  const fileName = path.basename(filePath);
   const uploadStarted = () =>
     page
-      .evaluate(() => {
+      .evaluate((expectedFileName) => {
         const app = document.querySelector("wujie-app.wujie_iframe");
         const root = app && app.shadowRoot;
         if (!root) return false;
-        const input = root.querySelector('input[type="file"]');
-        if (input && input.files && input.files.length) return true;
+        // input.files 只能证明文件已写入 input，不能证明页面真正接收并开始上传。
         if (root.querySelector("video")) return true;
+        const tags = Array.from(root.querySelectorAll(".tag-inner"));
+        if (tags.some((tag) => String(tag.textContent || "").trim() === "删除")) {
+          return true;
+        }
+        const text = String(root.textContent || "");
+        if (expectedFileName && text.includes(expectedFileName)) return true;
+        const progress = Array.from(
+          root.querySelectorAll(
+            '.ant-progress, [class*="progress"], [role="progressbar"]'
+          )
+        );
+        if (progress.some((node) => {
+          const value = String(
+            node.getAttribute("aria-valuenow") || node.textContent || ""
+          ).trim();
+          const style = String(node.getAttribute("style") || "");
+          return /\d+\s*%/.test(value) || /width\s*:\s*\d/.test(style);
+        })) {
+          return true;
+        }
         const wrap = root.querySelector(".upload-content, .ant-upload-drag");
         return !!(wrap && !/上传时长/.test(wrap.textContent || ""));
-      })
+      }, fileName)
       .catch(() => false);
 
   let lastError = null;
@@ -218,14 +388,130 @@ async function waitSphUploadProcessing(page) {
     () => {
       const app = document.querySelector("wujie-app.wujie_iframe");
       if (!app || !app.shadowRoot) return false;
-      const tag = app.shadowRoot.querySelector(".tag-inner");
-      return !!(tag && tag.textContent.trim() === "删除");
+      const root = app.shadowRoot;
+      const pageText = String(root.textContent || "").replace(/\s+/g, " ");
+      // 「删除」标签从上传开始就会出现，不能作为完成标志。平台在未完成时会明确
+      // 显示“文件上传中，请等待完成后再编辑”，此时发表按钮虽无 disabled 属性，
+      // 实际仍是灰色且点击无效。
+      if (/文件上传中|正在上传|上传中，请等待|视频处理中|正在处理/.test(pageText)) {
+        return false;
+      }
+      const progressTexts = Array.from(
+        root.querySelectorAll('.ant-progress, [class*="progress"], [role="progressbar"]')
+      )
+        .filter((node) => {
+          const style = window.getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0;
+        })
+        .map((node) =>
+          String(node.getAttribute("aria-valuenow") || node.textContent || "").trim()
+        );
+      if (progressTexts.some((text) => {
+        const match = text.match(/(\d+(?:\.\d+)?)\s*%?/);
+        return match && Number(match[1]) < 100;
+      })) {
+        return false;
+      }
+      const form = root.querySelector(".form-btns");
+      const publishGroup = form && form.querySelector(":scope > div:last-child");
+      return Boolean(publishGroup && publishGroup.querySelector("button,[role='button']"));
     },
     WAIT_UPLOAD_PROCESSING_MS,
     2000,
-    "等待视频处理超时（未出现「删除」标签）"
+    "等待视频处理超时（上传提示或进度条一直未结束）"
   );
   await page.waitForTimeout(2000);
+}
+
+/** 沿用项目原有的点击输入框 + keyboard.type 文案填写方式。 */
+async function fillSphTextAsBefore(page, description, shortTitle, fields = {}) {
+  if (fields.description !== false) {
+    const titleInput = await page.waitForSelector(
+      "wujie-app.wujie_iframe >>> .post-desc-box .input-editor",
+      { timeout: WAIT_SELECTOR_APPEAR_MS }
+    );
+    if (!titleInput) throw new Error("未找到视频号描述输入框");
+    await titleInput.click();
+    await page.evaluate(() => {
+      const app = document.querySelector("wujie-app.wujie_iframe");
+      const target = app && app.shadowRoot
+        ? app.shadowRoot.querySelector(".post-desc-box .input-editor")
+        : null;
+      if (!target) throw new Error("未找到视频号描述输入框真实节点");
+      target.focus();
+    });
+    await page.keyboard.type(description, { delay: 50 });
+  }
+
+  if (fields.shortTitle !== false) {
+    const shortTitleInput = await page.waitForSelector(
+      'wujie-app.wujie_iframe >>> input[placeholder="填写短标题有机会获得更多流量"]',
+      { timeout: WAIT_SELECTOR_APPEAR_MS }
+    );
+    if (!shortTitleInput) throw new Error("未找到视频号短标题输入框");
+    await shortTitleInput.click();
+    await page.evaluate(() => {
+      const app = document.querySelector("wujie-app.wujie_iframe");
+      const target = app && app.shadowRoot
+        ? app.shadowRoot.querySelector(
+            'input[placeholder="填写短标题有机会获得更多流量"]'
+          )
+        : null;
+      if (!target) throw new Error("未找到视频号短标题输入框真实节点");
+      target.focus();
+    });
+    await page.keyboard.type(shortTitle, { delay: 50 });
+  }
+}
+
+/** 发布前只读检查，避免上传完成重建表单后把旧方式写入的文案清空。 */
+async function readSphTextState(page, title, tags, shortTitle) {
+  return page.evaluate((expectedTitle, expectedTags, expectedShortTitle) => {
+    const app = document.querySelector("wujie-app.wujie_iframe");
+    const root = app && app.shadowRoot;
+    if (!root) return { descriptionOk: false, shortTitleOk: false };
+    const descriptionBox = root.querySelector(".post-desc-box");
+    const descriptionText = String(
+      (descriptionBox && descriptionBox.textContent) || ""
+    ).replace(/\s+/g, " ");
+    const tagList = String(expectedTags || "")
+      .split(/\s+/)
+      .filter(Boolean);
+    const descriptionOk =
+      descriptionText.includes(expectedTitle) &&
+      tagList.every((tag) => descriptionText.includes(tag));
+    const shortInput = root.querySelector(
+      'input[placeholder="填写短标题有机会获得更多流量"]'
+    );
+    const actualShortTitle = String((shortInput && shortInput.value) || "").trim();
+    const editor = root.querySelector(".post-desc-box .input-editor");
+    const editableNodes = descriptionBox
+      ? Array.from(
+          descriptionBox.querySelectorAll(
+            'input,textarea,[contenteditable="true"],[role="textbox"]'
+          )
+        ).map((node) => ({
+          tag: node.tagName,
+          className: String(node.className || ""),
+          contentEditable: node.getAttribute("contenteditable"),
+          role: node.getAttribute("role"),
+          placeholder: node.getAttribute("placeholder"),
+        }))
+      : [];
+    return {
+      descriptionOk,
+      shortTitleOk: actualShortTitle === expectedShortTitle,
+      descriptionText,
+      actualShortTitle,
+      editorTag: editor && editor.tagName,
+      editorClassName: String((editor && editor.className) || ""),
+      editorContentEditable: editor && editor.getAttribute("contenteditable"),
+      activeTag: root.activeElement && root.activeElement.tagName,
+      activeClassName: String((root.activeElement && root.activeElement.className) || ""),
+      editableNodes,
+    };
+  }, title, tags, shortTitle);
 }
 
 async function fallbackLinkFailureToDraft(page, data, window, event, error) {
@@ -277,30 +563,23 @@ export default async function (page, data, window, event, onFinish) {
     return;
   }
 
+  const description = [data.data.bt1, data.data.bq]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join(" ");
+  const shortTitle = (data.data.bt2Filled || data.data.bt2 || "").trim();
+  const normalizedShortTitle = shortTitle.replace(
+    /[，。、\/,;:!?'"()\[\]{}<>]/g,
+    " "
+  );
   try {
-    const titleInput = await page.waitForSelector(
-      "wujie-app.wujie_iframe >>> .post-desc-box .input-editor",
-      { timeout: WAIT_SELECTOR_APPEAR_MS }
-    );
-    // 传统input/textarea的操作
-    await titleInput.click();
-    await page.keyboard.type(data.data.bt1 + " " + data.data.bq, { delay: 50 });
-    // CLI / MCP 走 bt2，GUI 走 bt2Filled，两边都要能填上视频号必填的短标题
-    const shortTitle = (data.data.bt2Filled || data.data.bt2 || "").trim();
-    if (shortTitle) {
-      const sel2 =
-        'wujie-app.wujie_iframe >>> input[placeholder="填写短标题有机会获得更多流量"]';
-      const uploadInput2 = await page.waitForSelector(sel2, {
-        timeout: WAIT_SELECTOR_APPEAR_MS,
-      });
-      await uploadInput2.click();
-      let newBt = shortTitle.replace(/[，。、\/,;:!?'"()\[\]{}<>]/g, " ");
-      await page.keyboard.type(newBt, { delay: 50 });
-    } else {
-      console.log("视频号短标题未填写，跳过");
-    }
+    if (!description) throw new Error("视频号描述不能为空");
+    if (!shortTitle) throw new Error("视频号短标题不能为空");
+    await fillSphTextAsBefore(page, description, normalizedShortTitle);
   } catch (err) {
-    console.error("❌ 输入失败:", err);
+    throw new Error(
+      `视频号文案填写失败：${err && err.message ? err.message : String(err)}`
+    );
   }
 
   try {
@@ -341,17 +620,43 @@ export default async function (page, data, window, event, onFinish) {
     await tryDeclareOriginal(page);
     await waitSphUploadProcessing(page);
 
+    let textState = await readSphTextState(
+      page,
+      data.data.bt1,
+      data.data.bq,
+      normalizedShortTitle
+    );
+    if (!textState.descriptionOk || !textState.shortTitleOk) {
+      console.warn(
+        `[sph] 上传完成后文案缺失，沿用旧方式补写：${JSON.stringify(textState)}`
+      );
+      await fillSphTextAsBefore(page, description, normalizedShortTitle, {
+        description: !textState.descriptionOk,
+        shortTitle: !textState.shortTitleOk,
+      });
+      textState = await readSphTextState(
+        page,
+        data.data.bt1,
+        data.data.bq,
+        normalizedShortTitle
+      );
+    }
+    if (!textState.descriptionOk || !textState.shortTitleOk) {
+      throw new Error(`视频号文案发布前校验失败：${JSON.stringify(textState)}`);
+    }
+    console.log(`[sph] 文案发布前校验成功：${JSON.stringify(textState)}`);
+
     // 所有表单项（包括商品）完成后，草稿和发布只能二选一执行。
     if (isDraftMode) await clickSphDraftButton(page);
     else await clickSphPublishButton(page);
     console.log(
-      isDraftMode ? "✅ 视频号视频已保存草稿" : "✅ 视频号视频上传成功"
+      isDraftMode ? "✅ 视频号视频已保存草稿" : "✅ 视频号视频发布成功"
     );
     setTimeout(() => {
       event.reply("puppeteerFile-done", {
         ...data,
         status: true,
-        message: isDraftMode ? "保存草稿成功" : "上传成功",
+        message: isDraftMode ? "保存草稿成功" : "发布成功",
       });
       maybeClosePublishWindow(data, window);
     }, 5000);
