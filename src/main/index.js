@@ -29,7 +29,6 @@ import fs from "fs";
 import path from "path";
 import pie from "puppeteer-in-electron";
 import { isCliMode, runCliMain } from "./cli";
-import { startScheduledPublishScheduler } from "./services/scheduledPublish";
 import {
   installMainProcessLogFile,
   getMainProcessLogDir,
@@ -150,7 +149,6 @@ async function startApplication() {
 startApplication();
 
 function onAppReady() {
-  startScheduledPublishScheduler();
   initWindow((win) => {
     mainWin = win;
 

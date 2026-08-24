@@ -11,7 +11,6 @@ import Server from "../server/index";
 import { winURL } from "../config/StaticPath";
 import downloadFile from "./downloadFile";
 import { registerPuppeteerIpc } from "./puppeteerFile";
-import { registerScheduledPublishIpc } from "./scheduledPublish";
 import { registerSphWindowProductsIpc } from "./sphWindowProducts";
 import { createLaunchInstallerHandler } from "./launchInstaller";
 import { pickReleaseInstaller } from "./pickReleaseInstaller";
@@ -173,7 +172,6 @@ export default {
 
     // puppeteerFile 上传文件发布，获取登录状态
     registerPuppeteerIpc();
-    registerScheduledPublishIpc();
     registerSphWindowProductsIpc(ipcMain);
 
     // 通用的渲染进程 → 主进程日志透传通道，方便把 webview / Vue 里

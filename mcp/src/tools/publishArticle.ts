@@ -29,10 +29,6 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object';
 }
 
-function isScheduledResult(value: unknown): value is Record<string, unknown> {
-  return isObject(value) && value.scheduled === true;
-}
-
 function isPuppeteerDoneResult(value: unknown): value is Record<string, unknown> {
   return isObject(value) && value.channel === 'puppeteerFile-done';
 }
@@ -80,10 +76,6 @@ export const publishArticleTool: Tool = {
         type: 'string',
         description: '可选文章摘要。',
       },
-      publishAt: {
-        type: 'string',
-        description: '可选定时发布时间，格式由 CLI 校验。',
-      },
       show: {
         type: 'boolean',
         description: '如果为 true，显示底层浏览器窗口。',
@@ -118,7 +110,6 @@ export async function handlePublishArticle(args: Record<string, unknown>): Promi
   const category = getNonEmptyString(args.category);
   const tags = getNonEmptyString(args.tags);
   const summary = getNonEmptyString(args.summary);
-  const publishAt = getNonEmptyString(args.publishAt);
 
   const cliArgs: string[] = [
     'publish-article',
@@ -134,7 +125,6 @@ export async function handlePublishArticle(args: Record<string, unknown>): Promi
     ...(category !== null ? ['--category', category] : []),
     ...(tags !== null ? ['--tags', tags] : []),
     ...(summary !== null ? ['--summary', summary] : []),
-    ...(publishAt !== null ? ['--publish-at', publishAt] : []),
     ...(args.show === true ? ['--show'] : []),
   ];
 
@@ -142,15 +132,6 @@ export async function handlePublishArticle(args: Record<string, unknown>): Promi
 
   if (result.exitCode === 0) {
     const lastJson = result.lastJson;
-    if (isScheduledResult(lastJson)) {
-      return JSON.stringify({
-        status: 'scheduled',
-        id: lastJson.id ?? null,
-        publishAt: lastJson.publishAt ?? null,
-        message: lastJson.message ?? '定时文章发布任务已创建',
-      });
-    }
-
     if (!isPuppeteerDoneResult(lastJson)) {
       throw new Error('CLI 未返回发布结果（缺少 puppeteerFile-done）');
     }

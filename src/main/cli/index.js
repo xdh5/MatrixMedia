@@ -21,7 +21,6 @@ import { runDouyinCliLogin } from "../services/cliLogin/douyinCliLogin";
 import { runSphCliLogin } from "../services/cliLogin/sphCliLogin";
 import { runSingleFilePublish } from "../services/publishVideo";
 import { changeData } from "../server/utils";
-import { createScheduledRecord } from "../services/scheduledPublish";
 import { CLI_PUBLISH_TIMEOUT_MS } from "../services/upLoad/uploadTimeouts.js";
 import { resolveAccountPublishMode } from "../services/accountPublishSettingsResolver.js";
 
@@ -548,6 +547,7 @@ export async function runCliMain(argv = process.argv) {
         JSON.stringify({
           status: true,
           scheduled: true,
+          officialScheduled: result.officialScheduled === true,
           id: result.id,
           publishAt: result.publishAt,
           message: result.message,
@@ -671,48 +671,6 @@ export async function runCliMain(argv = process.argv) {
       lastPublishMessage: "等待发布结果",
       lastPublishAt: Date.now(),
     };
-
-    if (v.publishAt) {
-      let scheduledRecord;
-      try {
-        scheduledRecord = createScheduledRecord(recordItem, v.publishAt);
-      } catch (e) {
-        console.error(e && e.message ? e.message : e);
-        return 2;
-      }
-      try {
-        const addRes = changeData({
-          fileName: "pushData",
-          type: "add",
-          item: scheduledRecord,
-        });
-        let recordId = null;
-        if (addRes && addRes.success && Array.isArray(addRes.data)) {
-          const found = [...addRes.data]
-            .reverse()
-            .find(
-              (it) =>
-                it.scheduledTask === true &&
-                it.scheduledPublishAt === scheduledRecord.scheduledPublishAt &&
-                isSameArticleRecord(it, scheduledRecord)
-            );
-          if (found) recordId = found.id;
-        }
-        console.log(
-          JSON.stringify({
-            status: true,
-            scheduled: true,
-            id: recordId,
-            publishAt: scheduledRecord.scheduledPublishAtText,
-            message: "定时文章发布任务已创建，已写入发布历史",
-          })
-        );
-        return 0;
-      } catch (e) {
-        console.error("MatrixMedia: 写入定时文章发布记录失败:", e && e.message);
-        return 1;
-      }
-    }
 
     let recordId = null;
     try {

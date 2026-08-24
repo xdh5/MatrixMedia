@@ -68,7 +68,7 @@
             style="width: 260px"
           />
           <p class="bt2-tip">
-            定时任务会立即进入发布历史，到点后自动发布；如果程序关闭错过时间，会显示任务过期。
+            仅支持抖音、快手、百家号、头条和视频号；提交时会立即上传并在平台后台完成官方预约。
           </p>
         </el-form-item>
       </el-form>
@@ -544,7 +544,9 @@ function sleep(ms) {
 }
 
 function isOfficialSchedulePlatform(platform) {
-  return ["抖音", "快手"].includes(String(platform || "").trim());
+  return ["抖音", "快手", "百家号", "头条", "视频号"].includes(
+    String(platform || "").trim()
+  );
 }
 
 export default {
@@ -1418,6 +1420,15 @@ export default {
         this.$message.warning("发布到草稿不支持定时发布，请关闭定时发布后再试");
         return;
       }
+      if (
+        this.scheduledPublish &&
+        platforms.some((platform) => !isOfficialSchedulePlatform(platform.pt))
+      ) {
+        this.$message.warning(
+          "所选平台包含不支持官方定时发布的平台；应用内定时队列已移除"
+        );
+        return;
+      }
       const hasVideohao = platforms.some(this.isVideohaoPlatform);
       if (hasVideohao && this.form.bt2 && this.form.bt2.trim()) {
         // 仅当用户填写了短标题时才校验规则（6～16 字、无特殊标点）
@@ -1451,7 +1462,6 @@ export default {
         return 0;
       });
 
-      const scheduledWriteTasks = [];
       for (let p of platforms) {
         const partition = "persist:" + p.phone.split("-")[0] + p.pt;
         const taskId = Date.now() + Math.random();
@@ -1464,54 +1474,6 @@ export default {
         const officialScheduledPublish = Boolean(
           this.scheduledPublish && isOfficialSchedulePlatform(p.pt)
         );
-        if (
-          this.scheduledPublish &&
-          !effectiveMode.publishToDraft &&
-          !officialScheduledPublish
-        ) {
-          scheduledWriteTasks.push(
-            dataRequest({
-              type: "add",
-              fileName: "pushData",
-              item: {
-                bookName: video.bookName,
-                textOtherName: video.data.textOtherName,
-                textType: video.textType,
-                pt: p.pt,
-                selectedFile,
-                bt: video.data.bt1,
-                bt2: video.data.bt2,
-                bt2Filled: video.data.bt2Filled,
-                bq: video.data.bq,
-                creativeStatement: video.data.creativeStatement,
-                publishOptions: video.publishOptions,
-                filePath: this.localFilePath,
-                useragent: this.ptConfig[p.pt].useragent,
-                phone: p.phone,
-                partition,
-                url: this.ptConfig[p.pt].listIndex,
-                uploadUrl: this.ptConfig[p.pt].upload,
-                date: currentDate,
-                scheduledTask: true,
-                scheduledPublishAt: scheduledAtMs,
-                scheduledPublishAtText: scheduledAtText,
-                useRealBrowser: Boolean(p.useRealBrowser),
-                publishAttemptCount: 1,
-                republishCount: 0,
-                publishSuccessCount: 0,
-                publishFailCount: 0,
-                publishMode: effectiveMode.publishMode,
-                publishToDraft: effectiveMode.publishToDraft,
-                publishStatus: "scheduled",
-                lastPublishMessage: "等待定时发布",
-                lastPublishAt: Date.now(),
-              },
-            })
-          );
-          submitted++;
-          scheduledSubmitted++;
-          continue;
-        }
         // 用 JSON 兜底序列化，去掉 Vue 响应式代理 / 不可克隆对象，
         // 避免 Electron IPC 抛 "object could not be cloned" 导致页面会话提前关闭。
         const publishPayload = applyXhsConservativePublishOptions({
@@ -1647,10 +1609,6 @@ export default {
         if (effectiveMode.publishToDraft) draftSubmitted++;
       }
 
-      if (this.scheduledPublish && !isDraftMode) {
-        await Promise.all(scheduledWriteTasks);
-        ipcRenderer.send("scheduledPublish:refresh");
-      }
       if (submitted === 0) {
         this.$message.warning("没有提交新的发布任务");
         return;
@@ -1659,7 +1617,7 @@ export default {
       if (draftSubmitted === submitted) {
         successMessage = `已提交 ${submitted} 个平台保存草稿`;
       } else if (scheduledSubmitted === submitted) {
-        successMessage = `已创建 ${submitted} 个平台定时发布任务`;
+        successMessage = `已提交 ${submitted} 个平台官方预约任务`;
       }
       this.$message.success(successMessage);
       this.attrsVisible = false;
@@ -1817,6 +1775,15 @@ export default {
         this.$message.warning("发布到草稿不支持定时发布，请关闭定时发布后再试");
         return;
       }
+      if (
+        this.scheduledPublish &&
+        platforms.some((platform) => !isOfficialSchedulePlatform(platform.pt))
+      ) {
+        this.$message.warning(
+          "所选平台包含不支持官方定时发布的平台；应用内定时队列已移除"
+        );
+        return;
+      }
       const hasVideohao = platforms.some(this.isVideohaoPlatform);
 
       const currentDate = moment().format("YYYY-MM-DD");
@@ -1829,7 +1796,6 @@ export default {
       let submitted = 0;
       let draftSubmitted = 0;
       let scheduledSubmitted = 0;
-      const scheduledWriteTasks = [];
 
       for (const fileRow of this.dirBatchFiles) {
         // 优先使用 onDirPublishNext 里 IPC 解析好的真实路径（已做存在性 + 后缀补全）。
@@ -1892,54 +1858,6 @@ export default {
               .join(" ");
           } else {
             bq = tagList.map((t) => t.replace(/^#/, "")).join(" ");
-          }
-
-          if (
-            this.scheduledPublish &&
-            !effectiveMode.publishToDraft &&
-            !officialScheduledPublish
-          ) {
-            scheduledWriteTasks.push(
-              dataRequest({
-                type: "add",
-                fileName: "pushData",
-                item: {
-                  bookName,
-                  textOtherName,
-                  textType: "local",
-                  pt: p.pt,
-                  selectedFile,
-                  bt: bt1,
-                  bt2,
-                  bt2Filled: bt2FilledForVideohao,
-                  bq,
-                  creativeStatement,
-                  filePath,
-                  useragent: this.ptConfig[p.pt].useragent,
-                  phone: p.phone,
-                  partition,
-                  url: this.ptConfig[p.pt].listIndex,
-                  uploadUrl: this.ptConfig[p.pt].upload,
-                  date: currentDate,
-                  scheduledTask: true,
-                  scheduledPublishAt: scheduledAtMs,
-                  scheduledPublishAtText: scheduledAtText,
-                  useRealBrowser: Boolean(p.useRealBrowser),
-                  publishMode: effectiveMode.publishMode,
-                  publishToDraft: effectiveMode.publishToDraft,
-                  publishAttemptCount: 1,
-                  republishCount: 0,
-                  publishSuccessCount: 0,
-                  publishFailCount: 0,
-                  publishStatus: "scheduled",
-                  lastPublishMessage: "等待定时发布",
-                  lastPublishAt: Date.now(),
-                },
-              })
-            );
-            submitted++;
-            scheduledSubmitted++;
-            continue;
           }
 
           const publishPayload = applyXhsConservativePublishOptions({
@@ -2036,11 +1954,6 @@ export default {
         }
       }
 
-      if (this.scheduledPublish && !isDraftMode) {
-        await Promise.all(scheduledWriteTasks);
-        ipcRenderer.send("scheduledPublish:refresh");
-      }
-
       if (submitted === 0) {
         this.$message.warning("没有提交新的发布任务");
         return;
@@ -2049,7 +1962,7 @@ export default {
       if (draftSubmitted === submitted) {
         successMessage = `已提交 ${submitted} 个目录批量保存草稿任务`;
       } else if (scheduledSubmitted === submitted) {
-        successMessage = `已创建 ${submitted} 个目录批量定时发布任务`;
+        successMessage = `已提交 ${submitted} 个目录批量官方预约任务`;
       }
       this.$message.success(successMessage);
       this.attrsVisible = false;

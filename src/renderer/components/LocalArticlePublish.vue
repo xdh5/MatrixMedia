@@ -57,25 +57,6 @@
             placeholder="选填"
           />
         </el-form-item>
-        <el-form-item label="定时发布">
-          <el-switch
-            v-model="scheduledPublish"
-            active-text="定时"
-            inactive-text="立即"
-          />
-        </el-form-item>
-        <el-form-item v-if="scheduledPublish" label="发布时间">
-          <el-date-picker
-            v-model="publishAt"
-            type="datetime"
-            value-format="yyyy-MM-dd HH:mm:ss"
-            placeholder="选择年月日时分秒"
-            style="width: 260px"
-          />
-          <p class="form-tip">
-            定时任务会立即进入发布历史，到点后自动发布；如果程序关闭错过时间，会显示任务过期。
-          </p>
-        </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
         <el-button @click="metaVisible = false">取消</el-button>
@@ -211,8 +192,6 @@ export default {
       tags: ["前端", "Electron"],
       thisShow: false,
       closeWindow: true,
-      scheduledPublish: false,
-      publishAt: "",
       showLoginDialog: false,
       loginData: {},
       treeData: [],
@@ -330,16 +309,6 @@ export default {
       ) {
         return "请填写正文或选择文章文件";
       }
-      return this.validatePublishAt();
-    },
-
-    validatePublishAt() {
-      if (!this.scheduledPublish) return "";
-      const value = String(this.publishAt || "").trim();
-      if (!value) return "请选择定时发布时间";
-      const dt = moment(value, "YYYY-MM-DD HH:mm:ss", true);
-      if (!dt.isValid()) return "定时发布时间格式应为 YYYY-MM-DD HH:mm:ss";
-      if (!dt.isAfter(moment())) return "定时发布时间必须是未来时间";
       return "";
     },
 
@@ -383,8 +352,6 @@ export default {
       this.tags = ["前端", "Electron"];
       this.thisShow = false;
       this.closeWindow = true;
-      this.scheduledPublish = false;
-      this.publishAt = "";
       this.showLoginDialog = false;
       this.loginData = {};
       this.republishContext = null;
@@ -596,12 +563,6 @@ export default {
 
       const article = this.buildArticlePayload();
       const currentDate = moment().format("YYYY-MM-DD");
-      const scheduledAtText = String(this.publishAt || "").trim();
-      const scheduledAtMs = this.scheduledPublish
-        ? moment(scheduledAtText, "YYYY-MM-DD HH:mm:ss", true).valueOf()
-        : null;
-      const scheduledWritePromises = [];
-
       for (let p of platforms) {
         const partition = "persist:" + p.phone.split("-")[0] + p.pt;
         const taskId = Date.now() + Math.random();
@@ -609,23 +570,6 @@ export default {
         const shouldCloseWindowAfterPublish = shouldShow
           ? this.closeWindow
           : true;
-
-        if (this.scheduledPublish) {
-          scheduledWritePromises.push(
-            dataRequest({
-              type: "add",
-              fileName: "pushData",
-              item: this.buildPushRecord(article, p, partition, currentDate, {
-                scheduledTask: true,
-                scheduledPublishAt: scheduledAtMs,
-                scheduledPublishAtText: scheduledAtText,
-                publishStatus: "scheduled",
-                lastPublishMessage: "等待定时发布",
-              }),
-            })
-          );
-          continue;
-        }
 
         // JSON 兜底序列化，避免 Vue 响应式代理 / 不可克隆对象触发 IPC 错误
         ipcRenderer.send("puppeteerFile", JSON.parse(JSON.stringify({
@@ -681,13 +625,7 @@ export default {
         }
       }
 
-      if (this.scheduledPublish) {
-        await Promise.all(scheduledWritePromises);
-        ipcRenderer.send("scheduledPublish:refresh");
-      }
-      const successMessage = this.scheduledPublish
-        ? `已创建 ${platforms.length} 个掘金账号定时发布任务`
-        : `已提交 ${platforms.length} 个掘金账号发布`;
+      const successMessage = `已提交 ${platforms.length} 个掘金账号发布`;
       this.$message.success(successMessage);
       this.platformVisible = false;
       this.resetState();

@@ -15,6 +15,34 @@ export function supportsOfficialSchedule(platform) {
   return OFFICIAL_SCHEDULE_PLATFORMS.has(String(platform || "").trim());
 }
 
+export function parseOfficialPublishAt(value, nowMs = Date.now()) {
+  const text = String(value || "").trim();
+  const matched = text.match(
+    /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/
+  );
+  if (!matched) {
+    return { ok: false, error: "官方定时发布时间格式应为 YYYY-MM-DD HH:mm:ss" };
+  }
+  const [year, month, day, hour, minute, second] = matched
+    .slice(1)
+    .map((item) => Number(item));
+  const scheduled = new Date(year, month - 1, day, hour, minute, second, 0);
+  const valid =
+    scheduled.getFullYear() === year &&
+    scheduled.getMonth() === month - 1 &&
+    scheduled.getDate() === day &&
+    scheduled.getHours() === hour &&
+    scheduled.getMinutes() === minute &&
+    scheduled.getSeconds() === second;
+  if (!valid) {
+    return { ok: false, error: "官方定时发布时间不是有效日期" };
+  }
+  if (scheduled.getTime() <= nowMs) {
+    return { ok: false, error: "官方定时发布时间必须是未来时间" };
+  }
+  return { ok: true, value: scheduled.getTime(), text };
+}
+
 function normalizePublishAt(value) {
   const text = String(value || "").trim();
   const matched = text.match(

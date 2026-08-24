@@ -50,7 +50,6 @@ export function parsePublishArticleArgs(subArgv) {
     category: "前端",
     tags: "前端 Electron",
     summary: "",
-    publishAt: null,
     show: false,
     closeWindowAfterPublish: true,
   };
@@ -108,10 +107,10 @@ export function parsePublishArticleArgs(subArgv) {
       out.summary = read.value || "";
       i = read.nextIndex;
     } else if (a === "--publish-at") {
-      const read = readOptionValue(args, i, "--publish-at");
-      if (!read.ok) return { ok: false, error: read.error };
-      out.publishAt = read.value;
-      i = read.nextIndex;
+      return {
+        ok: false,
+        error: "掘金不支持平台官方定时发布，应用内定时队列已移除",
+      };
     } else if (a === "--show") {
       out.show = true;
     } else if (a === "--no-close-window") {
@@ -171,7 +170,6 @@ export function publishArticleHelpText() {
       --category <name> 分类，默认 "前端"
       --tags <text>     标签，默认 "前端 Electron"，多个标签用空格分隔
       --summary <text>  文章摘要
-      --publish-at <t>  一次性定时发布，格式 "YYYY-MM-DD HH:mm:ss"
       --show            （已忽略）CLI 不显示浏览器窗口
       --no-close-window 发布后不自动关窗（仅 GUI 显示窗口时有效）
   -h, --help            显示帮助
@@ -179,6 +177,5 @@ export function publishArticleHelpText() {
 示例:
   matrixmedia cli publish-article -p juejin --phone 13800138000 -t "标题" --content "正文"
   matrixmedia cli publish-article -p jj --phone 13800138000 -t "标题" -f ./article.md --tags "前端 Electron"
-  matrixmedia cli publish-article -p 掘金 --partition persist:13800138000掘金 -t "标题" --content "正文" --publish-at "2026-05-13 10:00:00"
 `.trim();
 }

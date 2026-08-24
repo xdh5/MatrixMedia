@@ -5,7 +5,6 @@ import { normalizeCreativeStatement } from "../../shared/creativeStatement.js";
 import ptConfig from "../config/ptConfig";
 import { runPuppeteerTask } from "./puppeteerFile";
 import { changeData } from "../server/utils";
-import { createScheduledRecord, parsePublishAt } from "./scheduledPublish";
 import { CLI_PUBLISH_TIMEOUT_MS } from "./upLoad/uploadTimeouts.js";
 import {
   isRemotePublishFile,
@@ -14,7 +13,10 @@ import {
 } from "./resolvePublishFile";
 import { resolveAccountPublishMode } from "./accountPublishSettingsResolver.js";
 import { resolvePublishCompletion } from "../../shared/publishResult.js";
-import { supportsOfficialSchedule } from "./upLoad/officialSchedule.js";
+import {
+  parseOfficialPublishAt,
+  supportsOfficialSchedule,
+} from "./upLoad/officialSchedule.js";
 
 function fileStemFromSource(source) {
   const raw = String(source || "").trim();
@@ -70,15 +72,16 @@ export async function runSingleFilePublish(
   const officialScheduledPublish = Boolean(
     v.publishAt && supportsOfficialSchedule(v.platform)
   );
-  const deferRemoteDownload =
-    !fileContext &&
-    v.publishAt &&
-    !officialScheduledPublish &&
-    isRemotePublishFile(sourceFile);
-
+  if (v.publishAt && !officialScheduledPublish) {
+    return {
+      exitCode: 2,
+      status: "failed",
+      message: `${v.platform}不支持平台官方定时发布；应用内定时队列已移除`,
+    };
+  }
   if (fileContext) {
     resolvedFile = fileContext.resolvedFile;
-  } else if (!deferRemoteDownload) {
+  } else {
     try {
       const resolved = await resolvePublishFile(sourceFile);
       resolvedFile = resolved.localPath;
@@ -128,7 +131,14 @@ async function runSingleFilePublishInner(
   );
   let parsedPublishAt = null;
   if (v.publishAt) {
-    parsedPublishAt = parsePublishAt(v.publishAt);
+    if (!officialScheduledPublish) {
+      return {
+        exitCode: 2,
+        status: "failed",
+        message: `${v.platform}不支持平台官方定时发布；应用内定时队列已移除`,
+      };
+    }
+    parsedPublishAt = parseOfficialPublishAt(v.publishAt);
     if (!parsedPublishAt.ok) {
       return {
         exitCode: 2,
@@ -227,55 +237,6 @@ async function runSingleFilePublishInner(
         : "等待发布结果",
     lastPublishAt: Date.now(),
   };
-
-  if (v.publishAt && !officialScheduledPublish) {
-    let scheduledRecord;
-    try {
-      scheduledRecord = createScheduledRecord(recordItem, v.publishAt);
-    } catch (e) {
-      return {
-        exitCode: 2,
-        status: "failed",
-        message: e && e.message ? e.message : String(e),
-      };
-    }
-    try {
-      const addRes = changeData({
-        fileName: "pushData",
-        type: "add",
-        item: scheduledRecord,
-      });
-      let recordId = null;
-      if (addRes && addRes.success && Array.isArray(addRes.data)) {
-        const found = [...addRes.data]
-          .reverse()
-          .find(
-            (it) =>
-              it.scheduledTask === true &&
-              it.scheduledPublishAt === scheduledRecord.scheduledPublishAt &&
-              it.textOtherName === scheduledRecord.textOtherName &&
-              it.pt === scheduledRecord.pt &&
-              it.selectedFile === scheduledRecord.selectedFile &&
-              it.textType === scheduledRecord.textType
-          );
-        if (found) recordId = found.id;
-      }
-      return {
-        exitCode: 0,
-        status: "scheduled",
-        scheduled: true,
-        id: recordId,
-        publishAt: scheduledRecord.scheduledPublishAtText,
-        message: "定时发布任务已创建，已写入发布历史",
-      };
-    } catch (e) {
-      return {
-        exitCode: 1,
-        status: "failed",
-        message: `写入定时发布记录失败: ${e && e.message ? e.message : e}`,
-      };
-    }
-  }
 
   let recordId = null;
   try {
@@ -464,36 +425,44 @@ export async function runMultiPlatformPublish(parsedList) {
     };
   }
 
-  const sourceFile = String(parsedList[0].file || "").trim();
-  const allLocallyScheduled = parsedList.every(
+  const unsupportedScheduled = parsedList.find(
     (item) => item.publishAt && !supportsOfficialSchedule(item.platform)
   );
-  const deferRemoteDownload =
-    allLocallyScheduled && isRemotePublishFile(sourceFile);
+  if (unsupportedScheduled) {
+    return {
+      success: false,
+      exitCode: 2,
+      status: "failed",
+      message: `${unsupportedScheduled.platform}不支持平台官方定时发布；应用内定时队列已移除`,
+      total: parsedList.length,
+      succeeded: 0,
+      failed: parsedList.length,
+      results: [],
+    };
+  }
 
+  const sourceFile = String(parsedList[0].file || "").trim();
   let cleanupDownload = null;
   let fileContext = null;
 
-  if (!deferRemoteDownload) {
-    try {
-      const resolved = await resolvePublishFile(sourceFile);
-      fileContext = {
-        sourceFile,
-        resolvedFile: resolved.localPath,
-      };
-      cleanupDownload = resolved.cleanup;
-    } catch (e) {
-      return {
-        success: false,
-        exitCode: 1,
-        status: "failed",
-        message: `下载视频失败: ${e && e.message ? e.message : e}`,
-        total: parsedList.length,
-        succeeded: 0,
-        failed: parsedList.length,
-        results: [],
-      };
-    }
+  try {
+    const resolved = await resolvePublishFile(sourceFile);
+    fileContext = {
+      sourceFile,
+      resolvedFile: resolved.localPath,
+    };
+    cleanupDownload = resolved.cleanup;
+  } catch (e) {
+    return {
+      success: false,
+      exitCode: 1,
+      status: "failed",
+      message: `下载视频失败: ${e && e.message ? e.message : e}`,
+      total: parsedList.length,
+      succeeded: 0,
+      failed: parsedList.length,
+      results: [],
+    };
   }
 
   const results = [];
