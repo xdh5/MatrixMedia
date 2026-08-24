@@ -255,9 +255,10 @@ async function setKuaishouSchedule(page, publishAt) {
             options: cells.map((node) => String(node.textContent || "").replace(/\s+/g, "").trim()),
           };
         }
+        const target = cell.querySelector(".ant-picker-time-panel-cell-inner") || cell;
         column.scrollTop = Math.max(0, cell.offsetTop - Math.floor(column.clientHeight / 2));
         const id = `__mm_ks_picker_time_${targetColumnIndex}_${Date.now()}`;
-        cell.id = id;
+        target.id = id;
         return { ok: true, id };
       },
       { partKind: kind, expected: value, targetColumnIndex: columnIndex }
