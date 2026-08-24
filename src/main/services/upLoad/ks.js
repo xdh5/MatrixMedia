@@ -126,6 +126,9 @@ async function selectKsCreativeStatement(page, data) {
     );
   } catch (e) {
     console.warn("快手声明下拉项未出现:", e?.message || e);
+    // 声明下拉虽然没有匹配项，但遮罩可能仍覆盖页面；关闭后再继续设置发布时间。
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
     return;
   }
 

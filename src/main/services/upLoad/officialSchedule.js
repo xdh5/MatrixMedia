@@ -192,19 +192,43 @@ async function setKuaishouSchedule(page, publishAt) {
   if (!dateInputId) {
     throw new Error("快手已选择定时发布，但未找到可见的发布时间输入框");
   }
-  await page.click(`#${dateInputId}`, { delay: 100 });
+  const pickerAlreadyOpen = await page.evaluate(() => {
+    const active = (node) => {
+      const style = window.getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return (
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        style.pointerEvents !== "none" &&
+        rect.width > 0 &&
+        rect.height > 0 &&
+        !String(node.className || "").includes("-leave")
+      );
+    };
+    return [...document.querySelectorAll(".ant-picker-dropdown")].some(active);
+  });
+  // 选择“定时发布”后，快手当前版本会自动打开日期时间面板；只有未打开时才点输入框。
+  if (!pickerAlreadyOpen) {
+    await page.click(`#${dateInputId}`, { delay: 100 });
+  }
   await page.waitForFunction(
     () => {
       const visible = (node) => {
         const style = window.getComputedStyle(node);
         const rect = node.getBoundingClientRect();
-        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+        return (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          style.pointerEvents !== "none" &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          !String(node.className || "").includes("-leave")
+        );
       };
       return [...document.querySelectorAll(".ant-picker-dropdown")].some(visible);
     },
     { timeout: WAIT_SELECTOR_APPEAR_MS }
   );
-
   const targetDate = publishAt.minute.slice(0, 10);
   const selectPickerPart = async (kind, value, columnIndex = -1) => {
     const result = await page.evaluate(
@@ -212,7 +236,14 @@ async function setKuaishouSchedule(page, publishAt) {
         const visible = (node) => {
           const style = window.getComputedStyle(node);
           const rect = node.getBoundingClientRect();
-          return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+          return (
+            style.display !== "none" &&
+            style.visibility !== "hidden" &&
+            style.pointerEvents !== "none" &&
+            rect.width > 0 &&
+            rect.height > 0 &&
+            !String(node.className || "").includes("-leave")
+          );
         };
         const dropdowns = [...document.querySelectorAll(".ant-picker-dropdown")].filter(visible);
         const dropdown = dropdowns[dropdowns.length - 1];
@@ -266,10 +297,24 @@ async function setKuaishouSchedule(page, publishAt) {
     if (!result.ok) {
       throw new Error(`快手定时面板选择${kind === "date" ? "日期" : "时间"}失败：${JSON.stringify(result)}`);
     }
-    // Ant Design 的受控时间面板依赖完整的鼠标事件链，DOM 的 element.click()
-    // 可能只触发外观点击而不更新 React 状态，因此必须让 Puppeteer 真正点击。
+    // 面板位于页面底部的浮层中，可能超出无头窗口视口；直接向活动选项派发完整事件链。
     await page.waitForTimeout(250);
-    await page.click(`#${result.id}`, { delay: 100 });
+    await page.evaluate((id) => {
+      const target = document.getElementById(id);
+      if (!target) throw new Error("快手定时面板目标选项已失效");
+      const rect = target.getBoundingClientRect();
+      const options = {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2,
+        button: 0,
+      };
+      target.dispatchEvent(new MouseEvent("mousedown", options));
+      target.dispatchEvent(new MouseEvent("mouseup", options));
+      target.dispatchEvent(new MouseEvent("click", options));
+    }, result.id);
     await page.waitForTimeout(350);
     const pickerState = await page.evaluate((inputId) => {
       const input = document.getElementById(inputId);
@@ -285,6 +330,14 @@ async function setKuaishouSchedule(page, publishAt) {
     console.log(
       `[ks] 快手定时面板已选择${kind === "date" ? "日期" : "时间"} ${value}，当前状态: ${JSON.stringify(pickerState)}`
     );
+    if (
+      kind === "time" &&
+      Number(pickerState.selected[columnIndex]) !== Number(value)
+    ) {
+      throw new Error(
+        `快手定时面板时间选项未生效，目标 ${value}，当前 ${pickerState.selected[columnIndex] || "空"}`
+      );
+    }
   };
 
   await selectPickerPart("date", targetDate);
@@ -294,7 +347,7 @@ async function setKuaishouSchedule(page, publishAt) {
     const visible = (node) => {
       const style = window.getComputedStyle(node);
       const rect = node.getBoundingClientRect();
-      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+      return style.display !== "none" && style.visibility !== "hidden" && style.pointerEvents !== "none" && rect.width > 0 && rect.height > 0 && !String(node.className || "").includes("-leave");
     };
     const dropdowns = [...document.querySelectorAll(".ant-picker-dropdown")].filter(visible);
     const dropdown = dropdowns[dropdowns.length - 1];
@@ -308,7 +361,7 @@ async function setKuaishouSchedule(page, publishAt) {
     const visible = (node) => {
       const style = window.getComputedStyle(node);
       const rect = node.getBoundingClientRect();
-      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+      return style.display !== "none" && style.visibility !== "hidden" && style.pointerEvents !== "none" && rect.width > 0 && rect.height > 0 && !String(node.className || "").includes("-leave");
     };
     const dropdowns = [...document.querySelectorAll(".ant-picker-dropdown")].filter(visible);
     const dropdown = dropdowns[dropdowns.length - 1];
