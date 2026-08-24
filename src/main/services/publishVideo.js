@@ -5,7 +5,7 @@ import { normalizeCreativeStatement } from "../../shared/creativeStatement.js";
 import ptConfig from "../config/ptConfig";
 import { runPuppeteerTask } from "./puppeteerFile";
 import { changeData } from "../server/utils";
-import { createScheduledRecord } from "./scheduledPublish";
+import { createScheduledRecord, parsePublishAt } from "./scheduledPublish";
 import { CLI_PUBLISH_TIMEOUT_MS } from "./upLoad/uploadTimeouts.js";
 import {
   isRemotePublishFile,
@@ -14,6 +14,7 @@ import {
 } from "./resolvePublishFile";
 import { resolveAccountPublishMode } from "./accountPublishSettingsResolver.js";
 import { resolvePublishCompletion } from "../../shared/publishResult.js";
+import { supportsOfficialSchedule } from "./upLoad/officialSchedule.js";
 
 function fileStemFromSource(source) {
   const raw = String(source || "").trim();
@@ -66,8 +67,14 @@ export async function runSingleFilePublish(
 
   let cleanupDownload = null;
   let resolvedFile = sourceFile;
+  const officialScheduledPublish = Boolean(
+    v.publishAt && supportsOfficialSchedule(v.platform)
+  );
   const deferRemoteDownload =
-    !fileContext && v.publishAt && isRemotePublishFile(sourceFile);
+    !fileContext &&
+    v.publishAt &&
+    !officialScheduledPublish &&
+    isRemotePublishFile(sourceFile);
 
   if (fileContext) {
     resolvedFile = fileContext.resolvedFile;
@@ -116,6 +123,27 @@ async function runSingleFilePublishInner(
     pt: v.platform,
     requestDraftMode: Boolean(v.draft),
   });
+  const officialScheduledPublish = Boolean(
+    v.publishAt && supportsOfficialSchedule(v.platform)
+  );
+  let parsedPublishAt = null;
+  if (v.publishAt) {
+    parsedPublishAt = parsePublishAt(v.publishAt);
+    if (!parsedPublishAt.ok) {
+      return {
+        exitCode: 2,
+        status: "failed",
+        message: parsedPublishAt.error,
+      };
+    }
+  }
+  if (officialScheduledPublish && effectivePublishMode.publishToDraft) {
+    return {
+      exitCode: 2,
+      status: "failed",
+      message: `${v.platform}官方定时发布不能与草稿模式同时使用`,
+    };
+  }
 
   const taskPayload = {
     taskId: Date.now() + Math.random(),
@@ -135,6 +163,8 @@ async function runSingleFilePublishInner(
     publishMode: effectivePublishMode.publishMode,
     publishToDraft: effectivePublishMode.publishToDraft,
     publishOptions: v.publishOptions || {},
+    publishAt: officialScheduledPublish ? parsedPublishAt.text : "",
+    officialScheduledPublish,
     closeWindowAfterPublish: v.show ? v.closeWindowAfterPublish : true,
     useragent: cfg.useragent,
     partition: v.partition,
@@ -177,16 +207,28 @@ async function runSingleFilePublishInner(
     publishMode: effectivePublishMode.publishMode,
     publishToDraft: effectivePublishMode.publishToDraft,
     publishOptions: v.publishOptions || {},
-    publishStatus: effectivePublishMode.publishToDraft
-      ? "drafting"
-      : "publishing",
-    lastPublishMessage: effectivePublishMode.publishToDraft
-      ? "等待保存草稿结果"
-      : "等待发布结果",
+    scheduledTask: false,
+    officialScheduledPublish,
+    scheduledPublishAt: officialScheduledPublish
+      ? parsedPublishAt.value
+      : null,
+    scheduledPublishAtText: officialScheduledPublish
+      ? parsedPublishAt.text
+      : "",
+    publishStatus: officialScheduledPublish
+      ? "scheduling"
+      : effectivePublishMode.publishToDraft
+        ? "drafting"
+        : "publishing",
+    lastPublishMessage: officialScheduledPublish
+      ? "正在提交平台官方定时发布"
+      : effectivePublishMode.publishToDraft
+        ? "等待保存草稿结果"
+        : "等待发布结果",
     lastPublishAt: Date.now(),
   };
 
-  if (v.publishAt) {
+  if (v.publishAt && !officialScheduledPublish) {
     let scheduledRecord;
     try {
       scheduledRecord = createScheduledRecord(recordItem, v.publishAt);
@@ -323,10 +365,19 @@ async function runSingleFilePublishInner(
             return;
           }
           const completion = resolvePublishCompletion(payload);
-          updateRecord(completion.recordStatus, completion.message);
+          const officialScheduled = Boolean(
+            completion.ok && payload && payload.officialScheduled === true
+          );
+          updateRecord(
+            officialScheduled ? "scheduled" : completion.recordStatus,
+            completion.message
+          );
           finish({
             exitCode: completion.exitCode,
-            status: completion.status,
+            status: officialScheduled ? "scheduled" : completion.status,
+            scheduled: officialScheduled,
+            officialScheduled,
+            publishAt: officialScheduled ? parsedPublishAt.text : null,
             message: completion.message,
             id: recordId,
             publishMode: completion.savedAsDraft ? "draft" : "publish",
@@ -414,8 +465,11 @@ export async function runMultiPlatformPublish(parsedList) {
   }
 
   const sourceFile = String(parsedList[0].file || "").trim();
-  const allScheduled = parsedList.every((item) => item.publishAt);
-  const deferRemoteDownload = allScheduled && isRemotePublishFile(sourceFile);
+  const allLocallyScheduled = parsedList.every(
+    (item) => item.publishAt && !supportsOfficialSchedule(item.platform)
+  );
+  const deferRemoteDownload =
+    allLocallyScheduled && isRemotePublishFile(sourceFile);
 
   let cleanupDownload = null;
   let fileContext = null;
@@ -454,8 +508,11 @@ export async function runMultiPlatformPublish(parsedList) {
 
   try {
     for (const item of sortPublishPlatforms(parsedList)) {
+      const waitForOfficialSchedule = Boolean(
+        item.publishAt && supportsOfficialSchedule(item.platform)
+      );
       const result = await runSingleFilePublish(item, fileContext, {
-        waitForResult: false,
+        waitForResult: waitForOfficialSchedule,
         onDone: releaseSharedDownload,
       });
       results.push({

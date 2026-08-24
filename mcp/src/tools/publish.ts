@@ -73,7 +73,7 @@ export const publishVideoTool: Tool = {
       publishAt: {
         type: "string",
         description:
-          '可选定时发布时间，格式为 "YYYY-MM-DD HH:mm:ss"。',
+          '可选定时发布时间，格式为 "YYYY-MM-DD HH:mm:ss"。抖音、快手会立即上传并使用创作者平台官方定时发布；其他平台沿用矩媒本地定时。',
       },
       show: {
         type: "boolean",

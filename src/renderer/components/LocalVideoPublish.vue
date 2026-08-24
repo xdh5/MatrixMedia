@@ -543,6 +543,10 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isOfficialSchedulePlatform(platform) {
+  return ["抖音", "快手"].includes(String(platform || "").trim());
+}
+
 export default {
   name: "LocalVideoPublish",
   data() {
@@ -1457,7 +1461,14 @@ export default {
           : true;
         const video = this.buildPlatformVideoPayload(p, baseVideo);
         const effectiveMode = resolveEffectivePublishMode(isDraftMode, p);
-        if (this.scheduledPublish && !effectiveMode.publishToDraft) {
+        const officialScheduledPublish = Boolean(
+          this.scheduledPublish && isOfficialSchedulePlatform(p.pt)
+        );
+        if (
+          this.scheduledPublish &&
+          !effectiveMode.publishToDraft &&
+          !officialScheduledPublish
+        ) {
           scheduledWriteTasks.push(
             dataRequest({
               type: "add",
@@ -1511,6 +1522,8 @@ export default {
           selectedFile,
           publishMode: effectiveMode.publishMode,
           publishToDraft: effectiveMode.publishToDraft,
+          publishAt: officialScheduledPublish ? scheduledAtText : "",
+          officialScheduledPublish,
           url: this.ptConfig[p.pt].upload,
           show: shouldShow,
           closeWindowAfterPublish: shouldCloseWindowAfterPublish,
@@ -1551,12 +1564,24 @@ export default {
               republishCount: oldRepublish + 1,
               publishMode: effectiveMode.publishMode,
               publishToDraft: effectiveMode.publishToDraft,
-              publishStatus: effectiveMode.publishToDraft
-                ? "drafting"
-                : "publishing",
-              lastPublishMessage: effectiveMode.publishToDraft
-                ? "等待保存草稿结果"
-                : "等待发布结果",
+              scheduledTask: false,
+              officialScheduledPublish,
+              scheduledPublishAt: officialScheduledPublish
+                ? scheduledAtMs
+                : null,
+              scheduledPublishAtText: officialScheduledPublish
+                ? scheduledAtText
+                : "",
+              publishStatus: officialScheduledPublish
+                ? "scheduling"
+                : effectiveMode.publishToDraft
+                  ? "drafting"
+                  : "publishing",
+              lastPublishMessage: officialScheduledPublish
+                ? "正在提交平台官方定时发布"
+                : effectiveMode.publishToDraft
+                  ? "等待保存草稿结果"
+                  : "等待发布结果",
               lastPublishAt: Date.now(),
             },
           });
@@ -1585,16 +1610,28 @@ export default {
               useRealBrowser: Boolean(p.useRealBrowser),
               publishMode: effectiveMode.publishMode,
               publishToDraft: effectiveMode.publishToDraft,
+              scheduledTask: false,
+              officialScheduledPublish,
+              scheduledPublishAt: officialScheduledPublish
+                ? scheduledAtMs
+                : null,
+              scheduledPublishAtText: officialScheduledPublish
+                ? scheduledAtText
+                : "",
               publishAttemptCount: 1,
               republishCount: 0,
               publishSuccessCount: 0,
               publishFailCount: 0,
-              publishStatus: effectiveMode.publishToDraft
-                ? "drafting"
-                : "publishing",
-              lastPublishMessage: effectiveMode.publishToDraft
-                ? "等待保存草稿结果"
-                : "等待发布结果",
+              publishStatus: officialScheduledPublish
+                ? "scheduling"
+                : effectiveMode.publishToDraft
+                  ? "drafting"
+                  : "publishing",
+              lastPublishMessage: officialScheduledPublish
+                ? "正在提交平台官方定时发布"
+                : effectiveMode.publishToDraft
+                  ? "等待保存草稿结果"
+                  : "等待发布结果",
               lastPublishAt: Date.now(),
             },
           });
@@ -1606,6 +1643,7 @@ export default {
           await sleep(4000);
         }
         submitted++;
+        if (officialScheduledPublish) scheduledSubmitted++;
         if (effectiveMode.publishToDraft) draftSubmitted++;
       }
 
@@ -1841,6 +1879,9 @@ export default {
             : true;
           const creativeStatement = this.getPlatformStatement(p.id);
           const effectiveMode = resolveEffectivePublishMode(isDraftMode, p);
+          const officialScheduledPublish = Boolean(
+            this.scheduledPublish && isOfficialSchedulePlatform(p.pt)
+          );
 
           // Format bq for this platform
           const hashtagPlatforms = new Set(["视频号", "抖音", "快手"]);
@@ -1853,7 +1894,11 @@ export default {
             bq = tagList.map((t) => t.replace(/^#/, "")).join(" ");
           }
 
-          if (this.scheduledPublish && !effectiveMode.publishToDraft) {
+          if (
+            this.scheduledPublish &&
+            !effectiveMode.publishToDraft &&
+            !officialScheduledPublish
+          ) {
             scheduledWriteTasks.push(
               dataRequest({
                 type: "add",
@@ -1915,6 +1960,8 @@ export default {
             selectedFile,
             publishMode: effectiveMode.publishMode,
             publishToDraft: effectiveMode.publishToDraft,
+            publishAt: officialScheduledPublish ? scheduledAtText : "",
+            officialScheduledPublish,
             url: this.ptConfig[p.pt].upload,
             show: shouldShow,
             closeWindowAfterPublish: shouldCloseWindowAfterPublish,
@@ -1952,21 +1999,34 @@ export default {
               useRealBrowser: Boolean(p.useRealBrowser),
               publishMode: effectiveMode.publishMode,
               publishToDraft: effectiveMode.publishToDraft,
+              scheduledTask: false,
+              officialScheduledPublish,
+              scheduledPublishAt: officialScheduledPublish
+                ? scheduledAtMs
+                : null,
+              scheduledPublishAtText: officialScheduledPublish
+                ? scheduledAtText
+                : "",
               publishAttemptCount: 1,
               republishCount: 0,
               publishSuccessCount: 0,
               publishFailCount: 0,
-              publishStatus: effectiveMode.publishToDraft
-                ? "drafting"
-                : "publishing",
-              lastPublishMessage: effectiveMode.publishToDraft
-                ? "等待保存草稿结果"
-                : "等待发布结果",
+              publishStatus: officialScheduledPublish
+                ? "scheduling"
+                : effectiveMode.publishToDraft
+                  ? "drafting"
+                  : "publishing",
+              lastPublishMessage: officialScheduledPublish
+                ? "正在提交平台官方定时发布"
+                : effectiveMode.publishToDraft
+                  ? "等待保存草稿结果"
+                  : "等待发布结果",
               lastPublishAt: Date.now(),
             },
           });
 
           submitted++;
+          if (officialScheduledPublish) scheduledSubmitted++;
           if (isXhsPlatform(p.pt)) {
             await sleep(getXhsPlatformStaggerDelayMs());
           } else if (p.pt === "视频号") {

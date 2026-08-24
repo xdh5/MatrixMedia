@@ -85,7 +85,7 @@ electron . cli publish -p dy --phone 13800138000 -f /path/to/video.mp4 -t "标�
 | `--bt2`                   | **概括短标题** → `data.bt2`；省略时默认与视频标题一致（视频号等场景）      |
 | `--tags` / `--bq`         | **视频标签** → `data.bq`                                                   |
 | `--address`               | **地址** → `data.address`（仅百家号）                                      |
-| `--publish-at`            | 一次性定时发布，格式 `YYYY-MM-DD HH:mm:ss`；创建后立即进入发布历史         |
+| `--publish-at`            | 一次性定时发布，格式 `YYYY-MM-DD HH:mm:ss`；抖音、快手使用平台官方定时，其他平台使用矩媒本地调度 |
 | `--show`                  | 当前 CLI 会忽略，仍后台运行                                                |
 | `--no-close-window`       | CLI 下无效，仅与 GUI 显示窗口场景有关                                      |
 | `--draft`                 | 保存到平台草稿箱，不直接发布                                               |

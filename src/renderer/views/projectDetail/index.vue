@@ -394,7 +394,7 @@ export default {
         {
           field: "publishAt",
           required: "否",
-          desc: "定时发布 YYYY-MM-DD HH:mm:ss（多平台时需全部一致）",
+          desc: "定时发布 YYYY-MM-DD HH:mm:ss（抖音、快手使用平台官方定时；多平台时需全部一致）",
         },
         {
           field: "draft",

@@ -317,7 +317,7 @@ open /Applications/matrixmedia.app
 | `partition`          | 二选一 | 完整 session，如 `persist:13800138000抖音`                                                                                               |
 | `bt2`                | 否     | 视频号短标（含视频号时强烈建议填写）                                                                                                     |
 | `tags`               | 否     | 标签，支持空格 / 逗号分隔；HTTP 会按 GUI 批量发布习惯拆分                                                                                |
-| `publishAt`          | 否     | 一次性定时发布，格式 `YYYY-MM-DD HH:mm:ss`（多平台时需全部一致）                                                                         |
+| `publishAt`          | 否     | 一次性定时发布，格式 `YYYY-MM-DD HH:mm:ss`（多平台时需全部一致）；抖音、快手使用平台官方定时，其他平台使用矩媒本地调度                       |
 | `creativeStatement`  | 否     | 全局创作声明，等同 GUI「批量设置」；详见 [docs/http-api.md](./docs/http-api.md)                                                          |
 | `creativeStatements` | 否     | 按平台覆盖，如 `{ "dy": "ai_generated", "blbl": "fiction" }`                                                                             |
 

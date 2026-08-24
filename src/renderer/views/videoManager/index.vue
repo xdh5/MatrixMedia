@@ -73,7 +73,7 @@
                     <el-tag
                       size="mini"
                       :type="publishStatusType(sub.publishStatus)"
-                      >{{ publishStatusText(sub.publishStatus) }}</el-tag
+                      >{{ publishStatusText(sub.publishStatus, sub) }}</el-tag
                     >
                   </div>
                 </div>
@@ -209,7 +209,9 @@ export default {
       );
     },
     isUploadingPublishStatus(status) {
-      return ["publishing", "drafting"].includes(String(status || ""));
+      return ["publishing", "drafting", "scheduling"].includes(
+        String(status || "")
+      );
     },
     getUploadingPublishRecords() {
       const recordMap = new Map();
@@ -280,10 +282,14 @@ export default {
       if (status === "draft") return "info";
       return "warning";
     },
-    publishStatusText(status) {
+    publishStatusText(status, row = null) {
       if (status === "success") return "成功";
       if (status === "fail" || status === "failed") return "失败";
-      if (status === "scheduled") return "等待定时发布";
+      if (status === "scheduled")
+        return row && row.officialScheduledPublish
+          ? "平台已预约"
+          : "等待定时发布";
+      if (status === "scheduling") return "提交官方定时中";
       if (status === "skipped") return "已跳过";
       if (status === "expired") return "任务过期";
       if (status === "draft") return "已保存草稿";
@@ -596,6 +602,9 @@ export default {
       const isDraftMode =
         donePayload.publishMode === "draft" ||
         donePayload.publishToDraft === true;
+      const officialScheduled = Boolean(
+        success && donePayload.officialScheduled === true
+      );
       await dataRequest({
         type: "update",
         fileName: "pushData",
@@ -610,9 +619,11 @@ export default {
             : row.publishFailCount + 1,
           publishMode: isDraftMode ? "draft" : row.publishMode || "publish",
           publishStatus: success
-            ? isDraftMode
-              ? "draft"
-              : "success"
+            ? officialScheduled
+              ? "scheduled"
+              : isDraftMode
+                ? "draft"
+                : "success"
             : "failed",
           lastPublishMessage:
             donePayload.message ||

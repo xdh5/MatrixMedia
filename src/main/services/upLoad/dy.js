@@ -6,6 +6,10 @@ import {
   WAIT_UPLOAD_PROCESSING_MS,
   pollPageUntil,
 } from "./uploadTimeouts.js";
+import {
+  setOfficialSchedule,
+  waitForOfficialScheduleAccepted,
+} from "./officialSchedule.js";
 
 async function selectDyCreativeStatement(page, data) {
   const value = data.data && data.data.creativeStatement;
@@ -223,13 +227,34 @@ export default async function (page, data, window, event) {
     // 自主声明入口在视频转码完成后才出现，必须在点击发布前完成
     await selectDyCreativeStatementWithRetry(page, data);
 
+    const isOfficialSchedule = Boolean(data.officialScheduledPublish);
+    if (isOfficialSchedule) {
+      await setOfficialSchedule(page, "抖音", data.publishAt);
+    }
+
+    const previousUrl = page.url();
     await clickDyPublish(page, isDraftMode);
-    console.log(isDraftMode ? "✅ 抖音视频已保存草稿" : "✅ 抖音视频上传成功");
+    if (isOfficialSchedule) {
+      await waitForOfficialScheduleAccepted(page, "抖音", previousUrl);
+    }
+    console.log(
+      isDraftMode
+        ? "✅ 抖音视频已保存草稿"
+        : isOfficialSchedule
+          ? `✅ 抖音视频已由平台预约到 ${data.publishAt}`
+          : "✅ 抖音视频上传成功"
+    );
     setTimeout(() => {
       event.reply("puppeteerFile-done", {
         ...data,
         status: true,
-        message: isDraftMode ? "保存草稿成功" : "上传成功",
+        scheduled: isOfficialSchedule,
+        officialScheduled: isOfficialSchedule,
+        message: isDraftMode
+          ? "保存草稿成功"
+          : isOfficialSchedule
+            ? `抖音官方定时发布已预约: ${data.publishAt}`
+            : "上传成功",
       });
       maybeClosePublishWindow(data, window);
     }, 5000);

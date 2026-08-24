@@ -5,6 +5,11 @@ import {
   resolveKsCreativeStatementLabel,
 } from "../../../shared/creativeStatement.js";
 import { WAIT_SELECTOR_APPEAR_MS, WAIT_UPLOAD_PROCESSING_MS, pollPageUntil } from "./uploadTimeouts.js";
+import {
+  clickKuaishouScheduleConfirmation,
+  setOfficialSchedule,
+  waitForOfficialScheduleAccepted,
+} from "./officialSchedule.js";
 
 async function selectKsCreativeStatement(page, data) {
   const value = data.data && data.data.creativeStatement;
@@ -233,10 +238,16 @@ export default async function (page, data, window,event) {
       submitText
     );
 
+    const isOfficialSchedule = Boolean(data.officialScheduledPublish);
+    if (isOfficialSchedule) {
+      await setOfficialSchedule(page, "快手", data.publishAt);
+    }
+
     // 快手发布按钮点击：原先用 page.evaluateHandle 返回行级 div 再 puppeteer click，
     // 在 hidden window 下几何中心常落不到真正的 <button> 上，结果是"看起来点过了但没发"。
     // 改为在 evaluate 内部遍历真实 button / 行 div，直接调 DOM .click()，避开鼠标几何问题。
     // 快手草稿功能和发布一个逻辑一个是 发布 一个是取消两个字
+    const previousUrl = page.url();
     const clicked = await page.evaluate(text => {
       const norm = t => String(t || "").replace(/\s+/g, "").trim();
       const bar = document.querySelector("#setting-tours + div");
@@ -263,12 +274,22 @@ export default async function (page, data, window,event) {
     if (!clicked || !clicked.ok) {
       throw new Error(`未找到${submitText}按钮(${clicked && clicked.reason})`);
     }
+    if (isOfficialSchedule) {
+      await clickKuaishouScheduleConfirmation(page);
+      await waitForOfficialScheduleAccepted(page, "快手", previousUrl);
+    }
     console.log(isDraftMode ? `✅ 快手视频已保存草稿，click via=${clicked.via}` : `✅ 快手视频已触发发布，click via=${clicked.via}`);
     setTimeout(() => {
       event.reply("puppeteerFile-done", {
         ...data,
         status: true,
-        message: isDraftMode ? "保存草稿成功" : "上传成功",
+        scheduled: isOfficialSchedule,
+        officialScheduled: isOfficialSchedule,
+        message: isDraftMode
+          ? "保存草稿成功"
+          : isOfficialSchedule
+            ? `快手官方定时发布已预约: ${data.publishAt}`
+            : "上传成功",
       });
       maybeClosePublishWindow(data, window);
     }, 5000);
