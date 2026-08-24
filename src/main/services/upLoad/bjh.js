@@ -1,5 +1,6 @@
 import path from 'path'
 import maybeClosePublishWindow from './closeWindow.js'
+import { setOfficialSchedule } from './officialSchedule.js'
 import { resolveBjhCreativeStatementLabel } from '../../../shared/creativeStatement.js'
 import {
   WAIT_SELECTOR_APPEAR_MS,
@@ -477,7 +478,28 @@ export default async function (page, data, window, event) {
     )
     await page.waitForTimeout(1000)
 
-    const actionText = isDraftMode ? '存草稿' : '发布'
+    const isOfficialSchedule = Boolean(data.officialScheduledPublish)
+    const actionText = isOfficialSchedule
+      ? '定时发布'
+      : isDraftMode
+        ? '存草稿'
+        : '发布'
+
+    // 百家号有两层上传状态。底部按钮出现时，封面区域仍可能在转码；
+    // 必须等第二层进度条也消失后再点定时发布，否则按钮会静默无响应。
+    console.log('[bjh] 检查视频是否仍在上传（#cover-tabs-container .cheetah-progress-inner）...')
+    await pollPageUntil(
+      page,
+      "(function(){" +
+        "var container = document.querySelector('#cover-tabs-container');" +
+        "if (!container) return true;" +
+        "return !container.querySelector('.cheetah-progress-inner');" +
+      "})()",
+      5 * 60 * 1000,
+      2000,
+      '等待百家号视频上传进度条消失超时'
+    )
+    console.log('[bjh] 视频上传进度条已消失，准备提交')
 
     // 草稿 / 发布 二选一点击，不能两个都点（先点存草稿会改变页面状态，发布按钮就摸不到了）
     try {
@@ -493,6 +515,9 @@ export default async function (page, data, window, event) {
       throw waitErr
     }
 
+    if (isOfficialSchedule) {
+      await setOfficialSchedule(page, '百家号', data.publishAt)
+    } else {
     // 基于操作区容器左上角的固定偏移量点击：
     //   存草稿：left 600px, top 30px
     //   发布：  left 700px, top 30px
@@ -509,22 +534,6 @@ export default async function (page, data, window, event) {
 
     const cx = box.x + (isDraftMode ? 500 : 700)
     const cy = box.y + 30
-
-    // 点击前先等 #cover-tabs-container 下的 .cheetah-progress-inner 消失，
-    // 有则表示视频仍在上传中，等待最长 5 分钟。
-    console.log('[bjh] 检查视频是否仍在上传（#cover-tabs-container .cheetah-progress-inner）...')
-    await pollPageUntil(
-      page,
-      "(function(){" +
-        "var container = document.querySelector('#cover-tabs-container');" +
-        "if (!container) return true;" +
-        "return !container.querySelector('.cheetah-progress-inner');" +
-      "})()",
-      5 * 60 * 1000,
-      2000,
-      "等待百家号视频上传进度条消失超时"
-    ).catch(e => console.warn('[bjh] 进度条等待超时，强行继续:', e?.message || e))
-    console.log('[bjh] 视频上传进度条已消失，准备点击')
 
     // 点击后解析 .cheetah-message.cheetah-message-top 的图标类型：
     //   aria-label="info-circle"  → 成功提示，直接结束
@@ -574,6 +583,7 @@ export default async function (page, data, window, event) {
     if (!clickSuccess) {
       throw new Error(`百家号「${actionText}」多次点击后仍出现失败提示，放弃`)
     }
+    }
 
     console.log(
       isDraftMode ? '✅ 百家号视频已保存草稿' : '✅ 百家号视频上传成功'
@@ -582,7 +592,13 @@ export default async function (page, data, window, event) {
       event.reply('puppeteerFile-done', {
         ...data,
         status: true,
-        message: isDraftMode ? '保存草稿成功' : '上传成功'
+        scheduled: isOfficialSchedule,
+        officialScheduled: isOfficialSchedule,
+        message: isDraftMode
+          ? '保存草稿成功'
+          : isOfficialSchedule
+            ? `百家号官方定时发布已预约: ${data.publishAt}`
+            : '上传成功'
       })
       maybeClosePublishWindow(data, window)
     }, 5000)

@@ -294,10 +294,11 @@ export default async function (page, data, window,event) {
       maybeClosePublishWindow(data, window);
     }, 5000);
   } catch (e) {
+    const detail = (e && e.message) || String(e);
     event.reply("puppeteerFile-done", {
       ...data,
       status: false,
-      message: "上传失败",
+      message: detail.length > 200 ? `${detail.slice(0, 200)}…` : detail,
     });
     console.error("❌ 发布失败", e);
   }

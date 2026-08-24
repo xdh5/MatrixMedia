@@ -38,7 +38,7 @@ function normalizeStatus(item) {
 function statusLabel(s) {
   if (s === "success") return "成功";
   if (s === "failed") return "失败";
-  if (s === "scheduled") return "等待定时发布";
+  if (s === "scheduled") return "平台已预约";
   if (s === "expired") return "任务过期";
   return "发布中";
 }
@@ -158,7 +158,7 @@ export function runHistoryCli(options) {
   const scheduledN = rows.filter(r => r.status === "scheduled").length;
   const expiredN = rows.filter(r => r.status === "expired").length;
   writeCliStdout(
-    `\n共 ${rows.length} 条记录，显示前 ${limited.length}：成功 ${okN} / 失败 ${failN} / 发布中 ${pubN} / 等待定时 ${scheduledN} / 任务过期 ${expiredN}`
+    `\n共 ${rows.length} 条记录，显示前 ${limited.length}：成功 ${okN} / 失败 ${failN} / 发布中 ${pubN} / 平台已预约 ${scheduledN} / 任务过期 ${expiredN}`
   );
   return 0;
 }

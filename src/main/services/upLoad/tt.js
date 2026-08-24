@@ -1,5 +1,6 @@
 import path from 'path'
 import maybeClosePublishWindow from './closeWindow.js'
+import { setOfficialSchedule } from './officialSchedule.js'
 import {
   isCreativeStatementNone,
   resolveTtCreativeStatementLabel
@@ -715,9 +716,16 @@ export default async function (page, data, window, event) {
       requestedDraft: isDraftMode,
       hasTagSelector
     })
+    const isOfficialSchedule = Boolean(data.officialScheduledPublish)
+    if (isOfficialSchedule) {
+      publishStage = '设置平台官方定时发布'
+      await setOfficialSchedule(page, '头条', data.publishAt)
+    }
     // 草稿：竖屏无标签时不支持保存草稿，直接走发布。
     await page.waitForTimeout(1000)
-    if (shouldSaveDraft) {
+    if (isOfficialSchedule) {
+      publishStage = '平台已预约'
+    } else if (shouldSaveDraft) {
       publishStage = '点击保存草稿'
       await clickToutiaoFooterAction(page, { draft: true })
     } else {
@@ -734,7 +742,13 @@ export default async function (page, data, window, event) {
         status: true,
         publishMode: shouldSaveDraft ? 'draft' : 'publish',
         publishToDraft: shouldSaveDraft,
-        message: shouldSaveDraft ? '保存草稿成功' : '上传成功'
+        scheduled: isOfficialSchedule,
+        officialScheduled: isOfficialSchedule,
+        message: shouldSaveDraft
+          ? '保存草稿成功'
+          : isOfficialSchedule
+            ? `头条官方定时发布已预约: ${data.publishAt}`
+            : '上传成功'
       })
       maybeClosePublishWindow(data, window)
     }, 5000)

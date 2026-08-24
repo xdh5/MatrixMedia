@@ -286,9 +286,7 @@ export default {
       if (status === "success") return "成功";
       if (status === "fail" || status === "failed") return "失败";
       if (status === "scheduled")
-        return row && row.officialScheduledPublish
-          ? "平台已预约"
-          : "等待定时发布";
+        return "平台已预约";
       if (status === "scheduling") return "提交官方定时中";
       if (status === "skipped") return "已跳过";
       if (status === "expired") return "任务过期";

@@ -126,7 +126,7 @@
 | `partition`          | 二选一 | 完整 session，如 `persist:13800138000抖音`                                                                                               |
 | `bt2`                | 否     | 视频号短标（含视频号时强烈建议填写）                                                                                                     |
 | `tags`               | 否     | 标签，支持空格 / 逗号分隔；HTTP 会按 GUI 批量发布习惯拆分后再按平台补 `#` 或去 `#`                                                       |
-| `publishAt`          | 否     | 一次性定时发布，格式 `YYYY-MM-DD HH:mm:ss`（多平台时需全部一致）；抖音、快手使用平台官方定时，其他平台使用矩媒本地调度                       |
+| `publishAt`          | 否     | 一次性定时发布，格式 `YYYY-MM-DD HH:mm:ss`（多平台时需全部一致）；抖音、快手、视频号、百家号、头条使用平台官方定时，其他平台使用矩媒本地调度 |
 | `draft`              | 否     | `true` 时保存到平台草稿箱，不直接发布                                                                                                    |
 | `sphProductId`       | 否     | 视频号商品上架快捷字段（商品编号）；仅视频号生效，等价于 `platformOptions.sph.link.type=product`                                         |
 | `sphLink`            | 否     | 视频号链接对象，如 `{ "type": "product", "value": "商品编号" }`；与 `sphProductId` 同时传时优先 `sphProductId`                           |

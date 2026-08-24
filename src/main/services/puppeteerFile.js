@@ -292,6 +292,13 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
         payload &&
         payload.status === false
       ) {
+        // 官方定时发布已经完成上传并操作平台页面，失败后自动重试可能重复提交。
+        // 直接返回真实失败结果，让调用方决定是否按新时间重新发起。
+        if (data.officialScheduledPublish) {
+          const replied = transport.reply(channel, ...args);
+          finishOnce();
+          return replied;
+        }
         const err = new Error(payload.message || "平台上传失败");
         err._mmUploadFailurePayload = payload;
         throw err;

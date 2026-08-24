@@ -11,6 +11,7 @@ import {
   WAIT_UPLOAD_PROCESSING_MS,
   pollPageUntil,
 } from "./uploadTimeouts.js";
+import { setOfficialSchedule } from "./officialSchedule.js";
 
 const SEL_ORIGINAL_CHECKBOX =
   "wujie-app.wujie_iframe >>> .declare-original-checkbox .ant-checkbox-wrapper";
@@ -646,6 +647,11 @@ export default async function (page, data, window, event, onFinish) {
     }
     console.log(`[sph] 文案发布前校验成功：${JSON.stringify(textState)}`);
 
+    const isOfficialSchedule = Boolean(data.officialScheduledPublish);
+    if (isOfficialSchedule) {
+      await setOfficialSchedule(page, "视频号", data.publishAt);
+    }
+
     // 所有表单项（包括商品）完成后，草稿和发布只能二选一执行。
     if (isDraftMode) await clickSphDraftButton(page);
     else await clickSphPublishButton(page);
@@ -656,7 +662,13 @@ export default async function (page, data, window, event, onFinish) {
       event.reply("puppeteerFile-done", {
         ...data,
         status: true,
-        message: isDraftMode ? "保存草稿成功" : "发布成功",
+        scheduled: isOfficialSchedule,
+        officialScheduled: isOfficialSchedule,
+        message: isDraftMode
+          ? "保存草稿成功"
+          : isOfficialSchedule
+            ? `视频号官方定时发表已预约: ${data.publishAt}`
+            : "发布成功",
       });
       maybeClosePublishWindow(data, window);
     }, 5000);
