@@ -192,11 +192,142 @@ async function setKuaishouSchedule(page, publishAt) {
   if (!dateInputId) {
     throw new Error("快手已选择定时发布，但未找到可见的发布时间输入框");
   }
-  await replaceDateTimeInput(
-    page,
-    `#${dateInputId}`,
-    publishAt.full
+  await page.click(`#${dateInputId}`, { delay: 100 });
+  await page.waitForFunction(
+    () => {
+      const visible = (node) => {
+        const style = window.getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+      };
+      return [...document.querySelectorAll(".ant-picker-dropdown")].some(visible);
+    },
+    { timeout: WAIT_SELECTOR_APPEAR_MS }
   );
+
+  const targetDate = publishAt.minute.slice(0, 10);
+  const selectPickerPart = async (kind, value, columnIndex = -1) => {
+    const result = await page.evaluate(
+      ({ partKind, expected, targetColumnIndex }) => {
+        const visible = (node) => {
+          const style = window.getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+        };
+        const dropdowns = [...document.querySelectorAll(".ant-picker-dropdown")].filter(visible);
+        const dropdown = dropdowns[dropdowns.length - 1];
+        if (!dropdown) return { ok: false, reason: "picker-missing" };
+
+        if (partKind === "date") {
+          const cell = [...dropdown.querySelectorAll(".ant-picker-cell")].find(
+            (node) => String(node.getAttribute("title") || "").trim() === expected
+          );
+          const target = cell && (cell.querySelector(".ant-picker-cell-inner") || cell);
+          if (!target || cell.classList.contains("ant-picker-cell-disabled")) {
+            return {
+              ok: false,
+              reason: "date-option-missing",
+              options: [...dropdown.querySelectorAll(".ant-picker-cell[title]")]
+                .map((node) => node.getAttribute("title"))
+                .filter(Boolean),
+            };
+          }
+          const id = `__mm_ks_picker_date_${Date.now()}`;
+          target.id = id;
+          return { ok: true, id };
+        }
+
+        const columns = [...dropdown.querySelectorAll(".ant-picker-time-panel-column")];
+        const column = columns[targetColumnIndex];
+        if (!column) {
+          return { ok: false, reason: "time-column-missing", columnCount: columns.length };
+        }
+        const expectedNumber = Number(expected);
+        const cells = [...column.querySelectorAll(".ant-picker-time-panel-cell")];
+        const cell = cells.find((node) => {
+          const text = String(node.textContent || "").replace(/\s+/g, "").trim();
+          return Number(text) === expectedNumber;
+        });
+        if (!cell || cell.classList.contains("ant-picker-time-panel-cell-disabled")) {
+          return {
+            ok: false,
+            reason: "time-option-missing",
+            options: cells.map((node) => String(node.textContent || "").replace(/\s+/g, "").trim()),
+          };
+        }
+        column.scrollTop = Math.max(0, cell.offsetTop - Math.floor(column.clientHeight / 2));
+        const id = `__mm_ks_picker_time_${targetColumnIndex}_${Date.now()}`;
+        cell.id = id;
+        return { ok: true, id };
+      },
+      { partKind: kind, expected: value, targetColumnIndex: columnIndex }
+    );
+    if (!result.ok) {
+      throw new Error(`快手定时面板选择${kind === "date" ? "日期" : "时间"}失败：${JSON.stringify(result)}`);
+    }
+    // Ant Design 的受控时间面板依赖完整的鼠标事件链，DOM 的 element.click()
+    // 可能只触发外观点击而不更新 React 状态，因此必须让 Puppeteer 真正点击。
+    await page.waitForTimeout(250);
+    await page.click(`#${result.id}`, { delay: 100 });
+    await page.waitForTimeout(350);
+    const pickerState = await page.evaluate((inputId) => {
+      const input = document.getElementById(inputId);
+      const columns = [...document.querySelectorAll(".ant-picker-time-panel-column")];
+      return {
+        value: String(input?.value || "").trim(),
+        selected: columns.map((column) => {
+          const cell = column.querySelector(".ant-picker-time-panel-cell-selected");
+          return String(cell?.textContent || "").replace(/\s+/g, "").trim();
+        }),
+      };
+    }, dateInputId);
+    console.log(
+      `[ks] 快手定时面板已选择${kind === "date" ? "日期" : "时间"} ${value}，当前状态: ${JSON.stringify(pickerState)}`
+    );
+  };
+
+  await selectPickerPart("date", targetDate);
+  await selectPickerPart("time", publishAt.hour.padStart(2, "0"), 0);
+  await selectPickerPart("time", publishAt.minuteValue.padStart(2, "0"), 1);
+  const timeColumnCount = await page.evaluate(() => {
+    const visible = (node) => {
+      const style = window.getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+    };
+    const dropdowns = [...document.querySelectorAll(".ant-picker-dropdown")].filter(visible);
+    const dropdown = dropdowns[dropdowns.length - 1];
+    return dropdown ? dropdown.querySelectorAll(".ant-picker-time-panel-column").length : 0;
+  });
+  if (timeColumnCount >= 3) {
+    await selectPickerPart("time", "00", 2);
+  }
+
+  const pickerConfirmed = await page.evaluate(() => {
+    const visible = (node) => {
+      const style = window.getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+    };
+    const dropdowns = [...document.querySelectorAll(".ant-picker-dropdown")].filter(visible);
+    const dropdown = dropdowns[dropdowns.length - 1];
+    const button = dropdown && (
+      dropdown.querySelector(".ant-picker-ok button") ||
+      [...dropdown.querySelectorAll("button")].find((node) => String(node.textContent || "").trim() === "确定")
+    );
+    if (!button || button.disabled) return false;
+    button.click();
+    return true;
+  });
+  if (!pickerConfirmed) {
+    throw new Error("快手定时面板未找到可用的“确定”按钮");
+  }
+  await page.waitForTimeout(800);
+  const actual = await page.$eval(`#${dateInputId}`, (input) => String(input.value || "").trim());
+  if (!actual.startsWith(publishAt.minute)) {
+    throw new Error(`快手定时面板确认后时间不一致，页面当前值为: ${actual || "空"}`);
+  }
+  console.log(`[ks] 快手定时面板确认后的时间: ${actual}`);
   console.log(`[ks] 已设置快手官方定时发布: ${publishAt.full}`);
 }
 
