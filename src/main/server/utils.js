@@ -8,6 +8,7 @@ const moment = require("moment"); // 引入日期处理库
  * 业务数据目录名（英文路径，避免卸载器/工具链编码问题；与 appId 一致便于识别）
  */
 const PERSISTENT_DATA_ROOT = "MatrixMedia";
+const { restoreAccountGroupsIfNeeded } = require("../services/persistentDataRestore");
 
 function dirHasContent(dir) {
   try {
@@ -49,6 +50,7 @@ function getDataDir() {
       if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
       }
+      restoreAccountGroupsIfNeeded(app, dataDir);
       return dataDir;
     }
   } catch (_) {

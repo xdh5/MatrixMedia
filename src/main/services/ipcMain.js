@@ -13,7 +13,7 @@ import downloadFile from "./downloadFile";
 import { registerPuppeteerIpc } from "./puppeteerFile";
 import { registerSphWindowProductsIpc } from "./sphWindowProducts";
 import { createLaunchInstallerHandler } from "./launchInstaller";
-import { pickReleaseInstaller } from "./pickReleaseInstaller";
+import { inspectLatestUpdate } from "./releaseUpdate";
 import { applyAccountProxyForTask } from "./proxyConfig";
 import {
   closeOtherAccountLoginWindows,
@@ -21,142 +21,25 @@ import {
   registerAccountLoginWindow,
 } from "./accountLoginWindowManager";
 
-const https = require("https");
-const version = require("../../../package.json").version;
-console.log(version, "-------");
 import fs from "fs";
 import path from "path";
 import xlsx from "xlsx";
-// 获取托管在 Gitee 的 pubtw 仓库 Release 信息。
-// 公开仓库可匿名调用 API，无需 access_token，避免把可写 token 打进开源客户端。
-function requestGiteeJson(path, fallback) {
-  return new Promise((resolve) => {
-    const options = {
-      hostname: "gitee.com",
-      path,
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "matrix-video",
-      },
-    };
-
-    const req = https.request(options, (res) => {
-      let data = "";
-
-      res.on("data", (chunk) => {
-        data += chunk;
-      });
-
-      res.on("end", () => {
-        if (res.statusCode !== 200) {
-          console.warn(`Gitee API ${path} 返回 ${res.statusCode}，跳过解析`);
-          resolve(fallback);
-          return;
-        }
-        try {
-          resolve(JSON.parse(data));
-        } catch (error) {
-          console.warn("Gitee 响应非 JSON，跳过:", data.slice(0, 80));
-          resolve(fallback);
-        }
-      });
-    });
-
-    req.on("error", (error) => {
-      console.error("Error fetching releases:", error);
-      resolve(fallback);
-    });
-
-    req.end();
-  });
-}
-
-// Cache Gitee release result for 1 hour to avoid rate-limit (403) on repeated calls
-let _releaseCache = null;
-let _releaseCacheAt = 0;
-const RELEASE_CACHE_TTL_MS = 60 * 60 * 1000;
-
-async function getLatestRelease() {
-  if (
-    _releaseCache !== null &&
-    Date.now() - _releaseCacheAt < RELEASE_CACHE_TTL_MS
-  ) {
-    return _releaseCache;
-  }
-  const latest = await requestGiteeJson(
-    "/api/v5/repos/gzlingyi_0/pubtw/releases/latest",
-    null
-  );
-  if (latest && latest.id) {
-    _releaseCache = latest;
-    _releaseCacheAt = Date.now();
-    return latest;
-  }
-
-  const list = await requestGiteeJson(
-    "/api/v5/repos/gzlingyi_0/pubtw/releases?page=1&per_page=20&direction=desc",
-    []
-  );
-  const result = Array.isArray(list) && list.length > 0 ? list[0] : null;
-  if (result) {
-    _releaseCache = result;
-    _releaseCacheAt = Date.now();
-  }
-  return result;
-}
-
-/** 解析 v0.9.7 / 0.9.7 为可比较的数字（按段比较，避免 0.9.10 与 parseInt 拼接错误） */
-function compareSemver(remoteRaw, localRaw) {
-  const norm = (s) =>
-    String(s || "")
-      .replace(/^v/i, "")
-      .trim()
-      .split(".")
-      .map((x) => parseInt(x, 10) || 0);
-  const a = norm(remoteRaw);
-  const b = norm(localRaw);
-  const len = Math.max(a.length, b.length, 3);
-  for (let i = 0; i < len; i++) {
-    const da = a[i] || 0;
-    const db = b[i] || 0;
-    if (da !== db) {
-      return da > db ? 1 : -1;
-    }
-  }
-  return 0;
-}
 
 export default {
   async Mainfunc(IsUseSysTitle) {
     // Always register the check-for-updates handler first
-    ipcMain.handle("check-for-updates", async (event) => {
-      const lastData = await getLatestRelease();
-      if (!lastData) {
-        return { hasUpdate: false };
-      }
-      const remoteVer =
-        (lastData.tag_name && String(lastData.tag_name).replace(/^v/i, "")) ||
-        (lastData.name && String(lastData.name).replace(/^v/i, ""));
-      console.log(lastData, remoteVer, "remoteVer", version);
-      const cmp = compareSemver(remoteVer, version);
-      const assets = lastData.assets || [];
+    ipcMain.handle("check-for-updates", async () => {
+      return inspectLatestUpdate({ electronApp });
+    });
 
-      const installer = pickReleaseInstaller(assets, {
-        translated: Boolean(electronApp.runningUnderARM64Translation),
-      });
-      const downloadURL = installer && installer.browser_download_url;
-      console.log(downloadURL, "downloadURL", assets);
-      console.log(cmp, "cmp");
-      if (downloadURL && cmp > 0) {
-        downloadFile.download(
-          BrowserWindow.fromWebContents(event.sender),
-          downloadURL
-        );
+    ipcMain.handle("download-update", async (event, downloadURL) => {
+      const url = String(downloadURL || "").trim();
+      if (!url) {
+        return { ok: false, message: "缺少下载地址" };
       }
-      return {
-        hasUpdate: Boolean(downloadURL && cmp > 0),
-      };
+      const sender = BrowserWindow.fromWebContents(event.sender);
+      downloadFile.download(sender, url);
+      return { ok: true };
     });
 
     // 先启动安装包再退出应用，避免安装器处理正在运行的主程序时失败。

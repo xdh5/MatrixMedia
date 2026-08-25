@@ -180,6 +180,15 @@ function onAppReady() {
         },
       },
       {
+        label: "检查更新",
+        click: () => {
+          win.show();
+          if (win.webContents && !win.webContents.isDestroyed()) {
+            win.webContents.send("manual-check-updates");
+          }
+        },
+      },
+      {
         label: "设置",
         click: function () {
           console.log("setting");

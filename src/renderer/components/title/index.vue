@@ -28,7 +28,7 @@
       </div>
     </div>
     <el-dialog
-      title="自动更新"
+      title="检查更新"
       :visible.sync="dialogVisible"
       :show-close="false"
       :close-on-press-escape="false"
@@ -77,7 +77,6 @@
 
 <script>
 import { ipcRenderer } from "electron";
-import { shouldRunDailyUpdateCheck } from "./updateCheckPolicy";
 export default {
   data: () => ({
     mix: false,
@@ -106,10 +105,10 @@ export default {
 
   components: {},
   created() {
-    this.checkForUpdates();
     ipcRenderer.invoke("IsUseSysTitle").then((res) => {
       this.IsUseSysTitle = res;
     });
+    ipcRenderer.on("manual-check-updates", this._onManualCheckUpdates);
     // 下载进度
     ipcRenderer.on("download-progress", this._onDownloadProgress);
     // 下载报错
@@ -127,29 +126,48 @@ export default {
   },
 
   methods: {
-    fetchReleaseNotes() {
-      fetch("https://gitee.com/api/v5/repos/gzlingyi_0/pubtw/releases/latest")
-        .then((res) => res.json())
-        .then((res) => {
-          this.releaseNoteTitle = res.name || res.tag_name || "";
-          this.releaseNoteBody = res.body || "";
-        })
-        .catch(() => {
-          this.releaseNoteTitle = "";
-          this.releaseNoteBody = "";
-        });
-    },
-    checkForUpdates(options = {}) {
-      if (!options.force && !shouldRunDailyUpdateCheck()) {
-        return Promise.resolve({ skipped: true });
-      }
-      this.fetchReleaseNotes();
+    checkForUpdates() {
       return ipcRenderer.invoke("check-for-updates").then((res) => {
-        if (res && res.hasUpdate) {
-          this.activeUpdateTab = "releaseNotes";
-        }
-        return res;
+        const payload = res || {};
+        this.releaseNoteTitle = payload.releaseTitle || "";
+        this.releaseNoteBody = payload.releaseNotes || "";
+        return payload;
       });
+    },
+    async _onManualCheckUpdates() {
+      try {
+        const payload = await this.checkForUpdates();
+        if (!payload || !payload.hasUpdate) {
+          this.$alert(
+            `当前已是最新版本（${payload?.localVersion || "未知"}）。`,
+            "检查更新",
+            { confirmButtonText: "确定" }
+          );
+          return;
+        }
+        const remoteVersion = payload.remoteVersion || "新版本";
+        this.$confirm(
+          `发现新版本 ${remoteVersion}（当前 ${payload.localVersion}），是否下载安装包？`,
+          "检查更新",
+          {
+            confirmButtonText: "下载",
+            cancelButtonText: "取消",
+            type: "info",
+          }
+        )
+          .then(() => {
+            this.activeUpdateTab = "releaseNotes";
+            this.resetDownloadUi();
+            return ipcRenderer.invoke("download-update", payload.downloadURL);
+          })
+          .catch(() => {});
+      } catch (error) {
+        this.$alert(
+          (error && error.message) || "检查更新失败，请稍后再试。",
+          "检查更新",
+          { confirmButtonText: "确定" }
+        );
+      }
     },
     _defaultProgressColors() {
       return [
@@ -184,7 +202,7 @@ export default {
           confirmButtonText: "重试",
           callback: () => {
             this.resetDownloadUi();
-            this.checkForUpdates({ force: true });
+            this._onManualCheckUpdates();
           },
         });
       }
@@ -214,6 +232,7 @@ export default {
   },
   destroyed() {
     ipcRenderer.removeAllListeners("w-max");
+    ipcRenderer.removeListener("manual-check-updates", this._onManualCheckUpdates);
     ipcRenderer.removeListener("download-progress", this._onDownloadProgress);
     ipcRenderer.removeListener("download-error", this._onDownloadError);
     ipcRenderer.removeListener("download-paused", this._onDownloadPaused);
