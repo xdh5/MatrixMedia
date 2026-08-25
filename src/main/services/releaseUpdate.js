@@ -5,18 +5,21 @@ import { pickReleaseInstaller } from "./pickReleaseInstaller.js";
 
 const version = require("../../../package.json").version;
 
+const RELEASE_OWNER = "xdh5";
+const RELEASE_REPO = "MatrixMedia";
+
 let _releaseCache = null;
 let _releaseCacheAt = 0;
 const RELEASE_CACHE_TTL_MS = 60 * 60 * 1000;
 
-function requestGiteeJson(path, fallback) {
+function requestGitHubJson(path, fallback) {
   return new Promise((resolve) => {
     const options = {
-      hostname: "gitee.com",
+      hostname: "api.github.com",
       path,
       method: "GET",
       headers: {
-        "Content-Type": "application/json",
+        Accept: "application/vnd.github+json",
         "User-Agent": "matrix-video",
       },
     };
@@ -28,21 +31,21 @@ function requestGiteeJson(path, fallback) {
       });
       res.on("end", () => {
         if (res.statusCode !== 200) {
-          console.warn(`Gitee API ${path} 返回 ${res.statusCode}，跳过解析`);
+          console.warn(`GitHub API ${path} 返回 ${res.statusCode}，跳过解析`);
           resolve(fallback);
           return;
         }
         try {
           resolve(JSON.parse(data));
         } catch (error) {
-          console.warn("Gitee 响应非 JSON，跳过:", data.slice(0, 80));
+          console.warn("GitHub 响应非 JSON，跳过:", data.slice(0, 80));
           resolve(fallback);
         }
       });
     });
 
     req.on("error", (error) => {
-      console.error("Error fetching releases:", error);
+      console.error("Error fetching GitHub releases:", error);
       resolve(fallback);
     });
 
@@ -54,20 +57,15 @@ async function getLatestRelease() {
   if (_releaseCache !== null && Date.now() - _releaseCacheAt < RELEASE_CACHE_TTL_MS) {
     return _releaseCache;
   }
-  const latest = await requestGiteeJson(
-    "/api/v5/repos/gzlingyi_0/pubtw/releases/latest",
-    null
-  );
+  const base = `/repos/${RELEASE_OWNER}/${RELEASE_REPO}/releases`;
+  const latest = await requestGitHubJson(`${base}/latest`, null);
   if (latest && latest.id) {
     _releaseCache = latest;
     _releaseCacheAt = Date.now();
     return latest;
   }
 
-  const list = await requestGiteeJson(
-    "/api/v5/repos/gzlingyi_0/pubtw/releases?page=1&per_page=20&direction=desc",
-    []
-  );
+  const list = await requestGitHubJson(`${base}?per_page=20`, []);
   const result = Array.isArray(list) && list.length > 0 ? list[0] : null;
   if (result) {
     _releaseCache = result;
@@ -117,5 +115,6 @@ export async function inspectLatestUpdate({ electronApp } = {}) {
     downloadURL: downloadURL || null,
     releaseTitle: lastData.name || lastData.tag_name || "",
     releaseNotes: lastData.body || "",
+    releaseSource: `github:${RELEASE_OWNER}/${RELEASE_REPO}`,
   };
 }
