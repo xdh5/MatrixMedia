@@ -64,7 +64,7 @@ export async function runSingleFilePublish(
   const sourceFile = String(v.file || "").trim();
   const stem = fileStemFromSource(sourceFile);
   const bt1 = String(v.title).trim();
-  const bt2 = (v.bt2 && String(v.bt2).trim()) || bt1;
+  const bt2 = (v.bt2 && String(v.bt2).trim()) || "";
   const bookName = (v.bookName && String(v.bookName).trim()) || stem;
 
   let cleanupDownload = null;
@@ -164,7 +164,7 @@ async function runSingleFilePublishInner(
       bt1,
       bt2,
       bq: String(v.bq || "").trim(),
-      bdText: "",
+      bdText: String(v.description || "").trim(),
       creativeStatement: normalizeCreativeStatement(v.creativeStatement || ""),
     },
     url: cfg.upload,

@@ -33,7 +33,7 @@ export const publishVideoTool: Tool = {
   description:
     "Publish a video to a target platform via MatrixMedia. Requires a logged-in account " +
     "identified by phone number. Partition is derived automatically. " +
-    "视频号 platform=sph 必须传 bt2（6～16字短标题，财经用成片 short_title / publish_bt2），禁止把长标题填进短标题。 " +
+    "视频号 platform=sph 可选传 bt2（6～16字短标题），未传时不填写短标题。 " +
     "Long-running -- emits progress notifications when a progressToken is supplied by the client.",
   inputSchema: {
     type: "object",
@@ -52,6 +52,10 @@ export const publishVideoTool: Tool = {
         type: "string",
         description: "Video title.",
       },
+      description: {
+        type: "string",
+        description: "可选的作品描述。",
+      },
       phone: {
         type: "string",
         description:
@@ -60,7 +64,7 @@ export const publishVideoTool: Tool = {
       bt2: {
         type: "string",
         description:
-          "短标题。视频号必填，6～16字，不要标点；财经成片传 short_title。禁止用长标题凑数。",
+          "可选短标题。视频号填写时建议 6～16 字；未传时不填写，也不回退为长标题。",
       },
       tags: {
         type: "string",
@@ -124,6 +128,7 @@ export async function handlePublishVideo(
   const platform = args.platform;
   const file = args.file;
   const title = args.title;
+  const description = args.description;
   const phone = args.phone;
   const bt2 = args.bt2;
   const tags = args.tags;
@@ -146,13 +151,8 @@ export async function handlePublishVideo(
   }
 
   const shortTitle = bt2 == null ? "" : String(bt2).trim();
-  if (String(platform) === "sph") {
+  if (String(platform) === "sph" && shortTitle) {
     const length = [...shortTitle].length;
-    if (!shortTitle) {
-      throw new Error(
-        "视频号必须传 bt2（6～16字短标题）。财经用成片返回的 short_title / publish_bt2，不要把长标题 title 填进短标题框。"
-      );
-    }
     if (length < 6 || length > 16) {
       throw new Error(`视频号 bt2 须为 6～16 字，当前 ${length} 字：${shortTitle}`);
     }
@@ -189,6 +189,7 @@ export async function handlePublishVideo(
     file,
     "--title",
     String(title),
+    ...(description ? ["--description", String(description)] : []),
     "--name",
     String(title),
     "--phone",

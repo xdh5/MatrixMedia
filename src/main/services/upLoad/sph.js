@@ -502,7 +502,7 @@ async function readSphTextState(page, title, tags, shortTitle) {
       : [];
     return {
       descriptionOk,
-      shortTitleOk: actualShortTitle === expectedShortTitle,
+      shortTitleOk: !expectedShortTitle || actualShortTitle === expectedShortTitle,
       descriptionText,
       actualShortTitle,
       editorTag: editor && editor.tagName,
@@ -564,7 +564,8 @@ export default async function (page, data, window, event, onFinish) {
     return;
   }
 
-  const description = [data.data.bt1, data.data.bq]
+  const suppliedDescription = String(data.data.bdText || "").trim();
+  const description = suppliedDescription || [data.data.bt2, data.data.bq]
     .map((value) => String(value || "").trim())
     .filter(Boolean)
     .join(" ");
@@ -575,8 +576,9 @@ export default async function (page, data, window, event, onFinish) {
   );
   try {
     if (!description) throw new Error("视频号描述不能为空");
-    if (!shortTitle) throw new Error("视频号短标题不能为空");
-    await fillSphTextAsBefore(page, description, normalizedShortTitle);
+    await fillSphTextAsBefore(page, description, normalizedShortTitle, {
+      shortTitle: Boolean(shortTitle),
+    });
   } catch (err) {
     throw new Error(
       `视频号文案填写失败：${err && err.message ? err.message : String(err)}`
@@ -623,7 +625,7 @@ export default async function (page, data, window, event, onFinish) {
 
     let textState = await readSphTextState(
       page,
-      data.data.bt1,
+      data.data.bdText || data.data.bt2,
       data.data.bq,
       normalizedShortTitle
     );
@@ -633,11 +635,11 @@ export default async function (page, data, window, event, onFinish) {
       );
       await fillSphTextAsBefore(page, description, normalizedShortTitle, {
         description: !textState.descriptionOk,
-        shortTitle: !textState.shortTitleOk,
+        shortTitle: Boolean(shortTitle) && !textState.shortTitleOk,
       });
       textState = await readSphTextState(
         page,
-        data.data.bt1,
+        data.data.bdText || data.data.bt2,
         data.data.bq,
         normalizedShortTitle
       );

@@ -922,8 +922,11 @@ export async function clickKuaishouScheduleConfirmation(page) {
         const rect = el.getBoundingClientRect();
         return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
       };
-      for (const button of document.querySelectorAll("button, [role='button']")) {
-        if (visible(button) && norm(button.textContent) === "确认发布") {
+      const dialog = [...document.querySelectorAll(".ant-modal, [role='dialog']")]
+        .find((element) => visible(element));
+      if (!dialog) return false;
+      for (const button of dialog.querySelectorAll("button, [role='button']")) {
+        if (visible(button) && ["确认发布", "确认", "确定"].includes(norm(button.textContent))) {
           button.click();
           return true;
         }
@@ -985,5 +988,29 @@ export async function waitForOfficialScheduleAccepted(page, platform, previousUr
     if (accepted) return;
     await page.waitForTimeout(500);
   }
-  throw new Error(`${platform}未确认官方定时发布成功，请检查平台页面提示`);
+  const diagnostic = await page.evaluate(() => {
+    const norm = (text) => String(text || "").replace(/\s+/g, " ").trim();
+    const visible = (element) => {
+      const style = window.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+    };
+    const selectors = [
+      ".semi-toast", ".semi-notification", ".ant-message", ".ant-notification",
+      ".ant-modal", ".byte-message", ".byte-notification", ".cheetah-message",
+      "[role='alert']", "[role='dialog']",
+    ];
+    const prompts = [...document.querySelectorAll(selectors.join(","))]
+      .filter(visible)
+      .map((element) => norm(element.textContent))
+      .filter(Boolean)
+      .slice(0, 8);
+    const buttons = [...document.querySelectorAll("button, [role='button']")]
+      .filter(visible)
+      .map((element) => ({ text: norm(element.textContent), disabled: Boolean(element.disabled) }))
+      .filter((item) => item.text)
+      .slice(-12);
+    return { url: location.href, prompts, buttons };
+  }).catch(() => ({ url: page.url(), prompts: [], buttons: [] }));
+  throw new Error(`${platform}未确认官方定时发布成功，页面状态: ${JSON.stringify(diagnostic)}`);
 }

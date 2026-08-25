@@ -33,6 +33,7 @@ export function parsePublishArgs(subArgv) {
     phone: null,
     partition: null,
     title: null,
+    description: "",
     bookName: null,
     bt2: null,
     bq: "",
@@ -60,6 +61,8 @@ export function parsePublishArgs(subArgv) {
       out.partition = args[++i];
     } else if (a === "--title" || a === "-t") {
       out.title = args[++i];
+    } else if (a === "--description" || a === "--desc") {
+      out.description = args[++i] || "";
     } else if (a === "--name" || a === "--book-name") {
       out.bookName = args[++i];
     } else if (a === "--bt2") {
@@ -200,11 +203,7 @@ export function parsePublishArgs(subArgv) {
 
   if (out.platform === "视频号") {
     const bt2Trim = out.bt2 && String(out.bt2).trim();
-    if (!bt2Trim) {
-      console.warn(
-        "MatrixMedia: 视频号短标未提供 --bt2，将回退为视频标题；平台输入框建议 6-16 字符，且会将 ，。、/,;:!?'\"()[]{}<> 等标点替换为空格。"
-      );
-    } else {
+    if (bt2Trim) {
       const cleaned = bt2Trim.replace(/[，。、\/,;:!?'"()\[\]{}<>]/g, "");
       if (cleaned.length > 16) {
         console.warn(
@@ -283,6 +282,7 @@ export function publishBodyToArgv(body) {
   pushPair(["phone"], "--phone");
   pushPair(["partition"], "--partition");
   pushPair(["title", "t"], "-t");
+  pushPair(["description", "desc"], "--description");
   pushPair(["bookName", "name", "book-name"], "--name");
   pushPair(["bt2"], "--bt2");
   const tags = pickBodyValue(body, ["tags", "bq"]);
@@ -574,8 +574,8 @@ export function publishHelpText() {
   -t, --title <text>    视频标题（必填）→ data.bt1
       --name <n>        名称 / 任务记录名 → bookName；默认与视频文件名（无扩展名）一致
       --book-name <n>   同 --name
-      --bt2 <text>      概括短标 → data.bt2；【视频号必填】目标输入框提示 6-16 字符，代码会把
-                            ，。、/,;:!?'"()[]{}<> 等标点替换为空格；不传则回退为 --title（会触发 warn）。
+      --bt2 <text>      可选概括短标 → data.bt2；视频号目标输入框提示 6-16 字符，代码会把
+                            ，。、/,;:!?'"()[]{}<> 等标点替换为空格；不传时保持空白。
                             抖音/小红书也会消费 bt2（抖音拼进描述、小红书回退标题或正文），
                             哔哩哔哩/百家号/头条/快手当前不使用。
       --tags <text>     视频标签 → data.bq（同 --bq）。多个标签用【空格】分隔，例如 "减脂 健身 教程"。
@@ -602,7 +602,7 @@ export function publishHelpText() {
 示例:
   矩媒.exe cli publish -p dy --phone 13800138000 -f C:\\\\v.mp4 -t "我的视频标题" --tags "#减脂 #健身"
   electron . cli publish -p dy --phone 13800138000 -f ./a.mp4 --name "任务A" -t "标题" --tags "#标签1 #标签2"
-  # 视频号务必带 --bt2 短标 + 空格分隔的 tags：
+  # 视频号可选带 --bt2 短标，并使用空格分隔的 tags：
   matrixmedia cli publish -p sph --phone 13800138000 -f ./v.mp4 \\\\
     -t "新手第一天跑步就坚持 5 公里是什么体验" \\\\
     --bt2 "5公里新手挑战" \\\\
