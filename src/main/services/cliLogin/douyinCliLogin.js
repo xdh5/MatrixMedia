@@ -11,6 +11,7 @@ import {
   paintLoginQrToTerminalFromPuppeteerPage,
 } from "./terminalQrFromCapture.js";
 import {
+  clearDouyinSession,
   hasDouyinSession,
   normalizeDouyinPartition,
 } from "./douyinSessionUtil.js";
@@ -35,6 +36,7 @@ export async function runDouyinCliLogin({
   timeoutMs,
   saveQrPngPath = null,
   puppeteerHeadless = false,
+  force = false,
 }) {
   const cfg = ptConfig.抖音;
   if (!cfg) {
@@ -43,6 +45,11 @@ export async function runDouyinCliLogin({
   }
 
   const part = normalizeDouyinPartition(partition);
+
+  if (force) {
+    await clearDouyinSession(part);
+    console.log("抖音：已清理当前账号分区的旧会话，将重新生成登录二维码。");
+  }
 
   if (puppeteerHeadless) {
     const { runDouyinPuppeteerHeadlessLogin } = await import(
@@ -53,6 +60,7 @@ export async function runDouyinCliLogin({
       terminalQr,
       timeoutMs,
       saveQrPngPath,
+      force,
     });
   }
 

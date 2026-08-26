@@ -113,7 +113,7 @@ function withQr(session: LoginSession, text: string): McpContent[] {
 export const loginTool: Tool = {
   name: "login",
   description:
-    "打开抖音或视频号扫码登录页，截取二维码图片返回给 Agent。Agent 必须把图片发给用户扫码，然后用 login_status 查询，直到 success 再 publish_video。" +
+    "打开抖音或视频号扫码登录页，截取二维码图片返回给 Agent。Agent 必须把 qr_path 同时写入最终回复的 Markdown 图片和可点击文件链接，禁止只依赖会折叠的工具输出；随后结束当前对话。用户确认扫码后再用 login_status 查询，直到 success 再 publish_video。" +
     "仅支持 platform=dy / sph。其它平台请让用户在矩媒 GUI 登录。",
   inputSchema: {
     type: "object",
@@ -130,6 +130,10 @@ export const loginTool: Tool = {
       timeoutSec: {
         type: "number",
         description: "等待扫码的最长秒数，默认 900",
+      },
+      force: {
+        type: "boolean",
+        description: "检测到假在线或登录失效时设为 true，强制刷新旧会话并返回新二维码",
       },
     },
     required: ["platform", "phone"],
@@ -159,6 +163,7 @@ export async function handleLogin(args: Record<string, unknown>): Promise<McpCon
     typeof args.timeoutSec === "number" && Number.isFinite(args.timeoutSec)
       ? Math.max(30, Math.floor(args.timeoutSec))
       : 900;
+  const force = args.force === true;
   const loginId = makeLoginId(platform, phone);
   stopSession(loginId);
 
@@ -169,7 +174,7 @@ export async function handleLogin(args: Record<string, unknown>): Promise<McpCon
     /* ignore */
   }
 
-  const child = spawnCli([
+  const cliArgs = [
     "login",
     "-p",
     platform,
@@ -179,7 +184,14 @@ export async function handleLogin(args: Record<string, unknown>): Promise<McpCon
     qrFile,
     "--timeout-sec",
     String(timeoutSec),
-  ]);
+  ];
+  if (force) {
+    cliArgs.push("--force");
+  }
+  if (platform === "dy") {
+    cliArgs.push("--puppeteer-headless");
+  }
+  const child = spawnCli(cliArgs);
   const session: LoginSession = {
     loginId,
     platform,

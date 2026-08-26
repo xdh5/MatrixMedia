@@ -106,17 +106,83 @@ async function selectDyCreativeStatementWithRetry(page, data, maxMs = 60000) {
 }
 
 async function clickDyPublish(page, isDraftMode) {
+  if (!isDraftMode) {
+    const dismissedGuide = await page.evaluate(() => {
+      const norm = (text) => String(text || "").replace(/\s+/g, "").trim();
+      const visible = (element) => {
+        const style = window.getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
+      };
+      const button = [...document.querySelectorAll("button, [role='button']")]
+        .find((element) => visible(element) && norm(element.textContent) === "我知道了");
+      if (!button) return false;
+      button.click();
+      return true;
+    });
+    if (dismissedGuide) {
+      console.log("[dy] 已关闭遮挡发布按钮的页面引导");
+      await page.waitForTimeout(500);
+    }
+  }
+
   const submitSelector = isDraftMode
     ? "#popover-tip-container+button"
     : "#popover-tip-container";
-  const submitBtn = await page.waitForSelector(submitSelector, {
-    timeout: WAIT_SELECTOR_APPEAR_MS,
-  });
-  await submitBtn.click({ delay: 200 });
+  if (isDraftMode) {
+    const submitBtn = await page.waitForSelector(submitSelector, {
+      timeout: WAIT_SELECTOR_APPEAR_MS,
+      visible: true,
+    });
+    await submitBtn.click({ delay: 200 });
+  } else {
+    await page.waitForFunction(() => {
+      const norm = (text) => String(text || "").replace(/\s+/g, "").trim();
+      const visible = (element) => {
+        const style = window.getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
+      };
+      return [...document.querySelectorAll("button, [role='button']")]
+        .some((element) => visible(element) && !element.disabled && norm(element.textContent) === "发布");
+    }, { timeout: WAIT_SELECTOR_APPEAR_MS });
+    const buttonHandles = await page.$$("button, [role='button']");
+    let clicked = false;
+    for (const buttonHandle of buttonHandles) {
+      const isPublishButton = await buttonHandle.evaluate((element) => {
+        const text = String(element.textContent || "").replace(/\s+/g, "").trim();
+        const style = window.getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return (
+          text === "发布" &&
+          !element.disabled &&
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
+      });
+      if (!isPublishButton) continue;
+      await buttonHandle.click({ delay: 200 });
+      clicked = true;
+      break;
+    }
+    if (!clicked) throw new Error("抖音真实发布按钮点击失败");
+  }
   console.log(
     isDraftMode
       ? "[dy] 已点击存草稿按钮 (#popover-tip-container+button)"
-      : "[dy] 已点击发布入口 (#popover-tip-container)"
+      : "[dy] 已点击真实发布按钮（文字=发布）"
   );
 }
 

@@ -1,6 +1,8 @@
 "use strict";
 
 import fs from "fs";
+import os from "os";
+import path from "path";
 import { nativeImage, session } from "electron";
 import puppeteerCore from "puppeteer-core";
 import { addExtra } from "puppeteer-extra";
@@ -164,6 +166,38 @@ async function hasPassportCookieOnPage(page) {
   return cookies.some((c) => c.name === "passport_assist_user" && c.value);
 }
 
+function normalizeElectronSameSite(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized === "strict") return "strict";
+  if (normalized === "lax") return "lax";
+  if (normalized === "none") return "no_restriction";
+  return "unspecified";
+}
+
+/** 无头 Chrome 登录成功后，把页面 Cookie 同步回 Electron 的同名账号分区。 */
+async function syncPageCookiesToElectronSession(page, ses) {
+  const cookies = await page.cookies(CREATOR_ORIGIN);
+  for (const cookie of cookies) {
+    const secure = cookie.secure !== false;
+    const details = {
+      url: `${secure ? "https" : "http"}://creator.douyin.com${cookie.path || "/"}`,
+      name: cookie.name,
+      value: cookie.value,
+      domain: cookie.domain || ".douyin.com",
+      path: cookie.path || "/",
+      secure,
+      httpOnly: Boolean(cookie.httpOnly),
+      sameSite: normalizeElectronSameSite(cookie.sameSite),
+    };
+    if (Number.isFinite(cookie.expires) && cookie.expires > 0) {
+      details.expirationDate = cookie.expires;
+    }
+    await ses.cookies.set(details);
+  }
+  await ses.cookies.flushStore();
+  ses.flushStorageData();
+}
+
 /**
  * 使用系统 Chrome/Chromium 无头启动，userDataDir 与 Electron partition 一致，便于与 GUI / publish 共用 Cookie。
  * @param {{ partition: string, terminalQr: boolean, timeoutMs: number, saveQrPngPath?: string | null }} opts
@@ -174,6 +208,7 @@ export async function runDouyinPuppeteerHeadlessLogin({
   terminalQr,
   timeoutMs,
   saveQrPngPath = null,
+  force = false,
 }) {
   const cfg = ptConfig.抖音;
   if (!cfg) {
@@ -202,11 +237,24 @@ export async function runDouyinPuppeteerHeadlessLogin({
   }
 
   const ses = session.fromPartition(part);
-  const userDataDir = ses.getStoragePath();
+  const partitionStoragePath = ses.getStoragePath();
+  const temporaryProfile = force
+    ? fs.mkdtempSync(path.join(os.tmpdir(), "matrixmedia-douyin-login-"))
+    : null;
+  const clearTemporaryProfile = () => {
+    if (!temporaryProfile) return;
+    try {
+      fs.rmSync(temporaryProfile, { recursive: true, force: true });
+    } catch (_) {
+      // 忽略临时登录目录清理失败
+    }
+  };
+  const userDataDir = temporaryProfile || partitionStoragePath;
   if (!userDataDir) {
     console.error(
       "错误: 无法取得 partition 磁盘路径（仅 persist: 分区支持）。请使用 persist:手机号抖音 形式。"
     );
+    clearTemporaryProfile();
     return 2;
   }
 
@@ -215,6 +263,7 @@ export async function runDouyinPuppeteerHeadlessLogin({
     console.error(
       "错误: 未找到 Chrome/Chromium。请安装浏览器或设置环境变量 PUPPETEER_EXECUTABLE_PATH（或 MATRIX_CHROMIUM_PATH）为可执行文件路径。"
     );
+    clearTemporaryProfile();
     return 2;
   }
 
@@ -235,6 +284,7 @@ export async function runDouyinPuppeteerHeadlessLogin({
       "Puppeteer 启动失败（可能与 Electron 同时占用同一用户数据目录有关）:",
       e.message
     );
+    clearTemporaryProfile();
     return 1;
   }
 
@@ -256,6 +306,7 @@ export async function runDouyinPuppeteerHeadlessLogin({
   } catch (e) {
     console.error("加载抖音创作者页失败:", e.message);
     await browser.close().catch(() => {});
+    clearTemporaryProfile();
     return 1;
   }
 
@@ -275,6 +326,7 @@ export async function runDouyinPuppeteerHeadlessLogin({
       } catch (_) {
         // 忽略
       }
+      clearTemporaryProfile();
       if (opts.clearTerminal && useTerminalQr) {
         clearTerminalScreen();
       }
@@ -295,15 +347,18 @@ export async function runDouyinPuppeteerHeadlessLogin({
       pollTimer = setInterval(() => {
         if (settled) return;
         hasPassportCookieOnPage(page)
-          .then((ok) => {
+          .then(async (ok) => {
             if (ok && !settled) {
+              await syncPageCookiesToElectronSession(page, ses);
               finish(0, {
                 clearTerminal: useTerminalQr,
-                log: "抖音登录成功，会话已写入 partition，可执行 cli publish。",
+                log: "抖音登录成功，Cookie 已同步到 Electron partition，可执行 cli publish。",
               });
             }
           })
-          .catch(() => {});
+          .catch((error) => {
+            console.error("同步抖音登录 Cookie 失败:", error && error.message);
+          });
       }, 2000);
       qrTimer = setInterval(() => {
         if (settled) return;

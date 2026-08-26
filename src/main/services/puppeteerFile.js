@@ -18,6 +18,10 @@ import {
 import { resolveChromePath } from "./chromeConfig.js";
 import xhsChromeHandler from "./upLoad/xhsChrome.js";
 import { isPlatformLoginUrl } from "../../shared/platformPageState.js";
+import {
+  needsRealPublishSessionProbe,
+  probeRealPublishSession,
+} from "./publishSessionProbe.js";
 
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
@@ -135,6 +139,20 @@ export function hasActivePublishTasks() {
 
 function isExpectedPublishUrl(data, currentUrl) {
   if (currentUrl === data.url) return true;
+  if (data && needsRealPublishSessionProbe(data.pt)) {
+    try {
+      const current = new URL(currentUrl);
+      const expected = new URL(data.url);
+      if (
+        current.origin === expected.origin &&
+        current.pathname === expected.pathname
+      ) {
+        return true;
+      }
+    } catch (_) {
+      // URL 无法解析时继续使用各平台原有兼容判断。
+    }
+  }
   if (data && data.pt === "掘金") {
     try {
       const current = new URL(currentUrl);
@@ -851,6 +869,33 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
           }
           const currentUrl = page.url();
           if (isExpectedPublishUrl(data, currentUrl)) {
+            if (needsRealPublishSessionProbe(data.pt)) {
+              const sessionProbe = await probeRealPublishSession(
+                page,
+                data.pt
+              );
+              if (!sessionProbe.ok) {
+                const supportsQrLogin =
+                  data.pt === "抖音" || data.pt === "视频号";
+                const message = `${sessionProbe.reason}，请重新登录后再试`;
+                console.error(
+                  `[auth] ${message}: ${sessionProbe.currentUrl || currentUrl}`
+                );
+                safeReply("puppeteer-noLogin", {
+                  ...data,
+                  currentUrl: sessionProbe.currentUrl || currentUrl,
+                  message,
+                  realSessionProbe: true,
+                  supportsQrLogin,
+                });
+                finishOnce();
+                if (win && !win.isDestroyed()) {
+                  closePublishWinProgrammatically(win);
+                }
+                return;
+              }
+              console.log(`[auth] ${sessionProbe.reason}`);
+            }
             const action = Type[data.pt];
             if (typeof action !== "function") {
               // pt 没注册处理器属于配置/调用方错误，重试 5 次也变不出来 handler，

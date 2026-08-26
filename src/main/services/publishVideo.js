@@ -352,7 +352,15 @@ async function runSingleFilePublishInner(
           const message = (payload && payload.message) || "登录态异常或未登录";
           console.error("登录态异常或未登录:", JSON.stringify(payload));
           updateRecord("failed", message);
-          finish({ exitCode: 3, status: "failed", message, id: recordId });
+          finish({
+            exitCode: 3,
+            status: "failed",
+            message,
+            id: recordId,
+            loginRequired: true,
+            realSessionProbe: payload && payload.realSessionProbe === true,
+            supportsQrLogin: payload && payload.supportsQrLogin === true,
+          });
         }
       },
     };

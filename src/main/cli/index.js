@@ -576,6 +576,17 @@ export async function runCliMain(argv = process.argv) {
         })
       );
     } else if (result.exitCode === 3) {
+      console.log(
+        JSON.stringify({
+          channel: "puppeteerFile-done",
+          status: false,
+          resultStatus: "failed",
+          loginRequired: result.loginRequired === true,
+          realSessionProbe: result.realSessionProbe === true,
+          supportsQrLogin: result.supportsQrLogin === true,
+          message: result.message || "登录态异常或未登录",
+        })
+      );
       console.error(result.message || "登录态异常或未登录");
       if (v.platform === "抖音") {
         console.error(
