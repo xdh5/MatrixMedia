@@ -54,6 +54,8 @@ function normalizePublishAt(value) {
   return {
     full: text,
     minute: `${matched[1]}-${matched[2]}-${matched[3]} ${matched[4]}:${matched[5]}`,
+    year: matched[1],
+    month: String(Number(matched[2])),
     day: String(Number(matched[3])),
     time: `${matched[4]}:${matched[5]}`,
     monthDay: `${matched[2]}月${matched[3]}日`,
@@ -413,6 +415,147 @@ async function setKuaishouSchedule(page, publishAt) {
   console.log(`[ks] 已设置快手官方定时发布: ${publishAt.full}`);
 }
 
+async function selectShipinhaoCalendarDay(page, publishAt) {
+  const expected = {
+    year: Number(publishAt.year),
+    month: Number(publishAt.month),
+    day: publishAt.day,
+  };
+  const deadline = Date.now() + 20000;
+  let lastState = null;
+  while (Date.now() < deadline) {
+    const state = await page.evaluate((target) => {
+      const visible = (node) => {
+        if (!node || !node.getBoundingClientRect) return false;
+        const style = window.getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
+      };
+      const inCalendar = (el) => {
+        let cur = el;
+        for (let i = 0; i < 10 && cur; i += 1) {
+          const cls = String(cur.className || "");
+          if (/picker|calendar|date/i.test(cls)) return true;
+          cur = cur.parentElement || (cur.getRootNode && cur.getRootNode().host) || null;
+        }
+        return false;
+      };
+      const app = document.querySelector("wujie-app.wujie_iframe");
+      const root = app && app.shadowRoot;
+      const scopes = [root, document].filter(Boolean);
+      if (!root) return { ok: false, reason: "shadow-root-missing" };
+      const allNodes = scopes.flatMap((scope) => [...scope.querySelectorAll("*")]);
+      const headers = allNodes
+        .filter(visible)
+        .filter((node) =>
+          /^\d{4}年\d{1,2}月$/.test(String(node.textContent || "").replace(/\s+/g, ""))
+        )
+        .sort((a, b) => a.querySelectorAll("*").length - b.querySelectorAll("*").length);
+      const headerNode = headers[0];
+      if (!headerNode) return { ok: false, reason: "month-header-missing" };
+      const headerText = String(headerNode.textContent || "").replace(/\s+/g, "");
+      const matched = headerText.match(/^(\d{4})年(\d{1,2})月$/);
+      const year = Number(matched[1]);
+      const month = Number(matched[2]);
+      const picker =
+        headerNode.closest("[class*='picker']") ||
+        headerNode.closest("[class*='calendar']") ||
+        headerNode.parentElement ||
+        root;
+      const collectDayNodes = () => {
+        const nodes = [];
+        const addFrom = (scope) => {
+          if (!scope || !scope.querySelectorAll) return;
+          nodes.push(
+            ...scope.querySelectorAll(
+              ".weui-desktop-picker__table a, .weui-desktop-picker__table td, [class*='picker'] a, [class*='picker'] td, [class*='calendar'] a, [class*='calendar'] td, td, a, span"
+            )
+          );
+        };
+        addFrom(picker);
+        scopes.forEach(addFrom);
+        const wanted = [String(target.day), String(target.day).padStart(2, "0")];
+        return [...new Set(nodes)]
+          .filter(visible)
+          .filter((item) => {
+            const text = String(item.textContent || "").replace(/\s+/g, "").trim();
+            const cls = String(item.className || "");
+            return (
+              wanted.includes(text) &&
+              /^\d{1,2}$/.test(text) &&
+              item.querySelectorAll("*").length <= 4 &&
+              !/disabled|faded|unselected|outside|prev|next/i.test(cls)
+            );
+          })
+          .filter((item) => inCalendar(item) || picker.contains(item))
+          .sort((a, b) => a.querySelectorAll("*").length - b.querySelectorAll("*").length);
+      };
+      if (year === target.year && month === target.month) {
+        const dayCell = collectDayNodes()[0];
+        if (!dayCell) {
+          return {
+            ok: false,
+            reason: "day-missing",
+            year,
+            month,
+            days: [...picker.querySelectorAll("a, td, span")]
+              .filter(visible)
+              .map((item) => ({
+                text: String(item.textContent || "").replace(/\s+/g, "").trim().slice(0, 20),
+                cls: String(item.className || "").slice(0, 80),
+              }))
+              .filter((item) => item.text)
+              .slice(0, 42),
+          };
+        }
+        dayCell.click();
+        return { ok: true, action: "select-day", year, month };
+      }
+      const wantNext = year * 12 + month < target.year * 12 + target.month;
+      const arrowScopes = [picker, ...scopes];
+      const arrows = arrowScopes.flatMap((scope) =>
+        [...(scope.querySelectorAll ? scope.querySelectorAll("a, i, button, span, div") : [])]
+      ).filter((el) => {
+        if (!visible(el)) return false;
+        return /arrow|prev|next|left|right|forward|back/i.test(String(el.className || ""));
+      });
+      const nav = arrows.find((el) =>
+        wantNext
+          ? /next|right|forward/i.test(String(el.className || "")) && !/prev|left|back/i.test(String(el.className || ""))
+          : /prev|left|back/i.test(String(el.className || "")) && !/next|right|forward/i.test(String(el.className || ""))
+      );
+      if (!nav) {
+        return {
+          ok: false,
+          reason: "month-nav-missing",
+          year,
+          month,
+          arrows: arrows.map((el) => String(el.className || "")).slice(0, 20),
+        };
+      }
+      nav.click();
+      return { ok: true, action: wantNext ? "next-month" : "prev-month", year, month };
+    }, expected);
+    lastState = state;
+    if (state.ok && state.action === "select-day") {
+      console.log(`[sph] 已选择视频号日期 ${publishAt.year}-${publishAt.month.padStart(2, "0")}-${publishAt.day.padStart(2, "0")}`);
+      return;
+    }
+    if (state.ok && (state.action === "next-month" || state.action === "prev-month")) {
+      console.log(`[sph] 日期面板翻月：${state.action}（当前 ${state.year}-${state.month}）`);
+    } else {
+      console.log(`[sph] 日期面板暂未就绪：${JSON.stringify(state)}`);
+    }
+    await page.waitForTimeout(400);
+  }
+  throw new Error(`视频号日期面板未找到可选的 ${publishAt.day} 日：${JSON.stringify(lastState)}`);
+}
+
 async function setShipinhaoSchedule(page, publishAt) {
   const selected = await page.evaluate(() => {
     const app = document.querySelector("wujie-app.wujie_iframe");
@@ -499,25 +642,7 @@ async function setShipinhaoSchedule(page, publishAt) {
   }
 
   await page.waitForTimeout(500);
-  const dateSelected = await page.evaluate((expectedDay) => {
-    const app = document.querySelector("wujie-app.wujie_iframe");
-    const root = app && app.shadowRoot;
-    if (!root) return false;
-    const candidates = [...root.querySelectorAll(".weui-desktop-picker__table a")]
-      .filter((item) => String(item.textContent || "").trim() === expectedDay)
-      .filter(
-        (item) =>
-          !String(item.className || "").includes("weui-desktop-picker__disabled") &&
-          !String(item.className || "").includes("weui-desktop-picker__faded")
-      );
-    const target = candidates[0];
-    if (!target) return false;
-    target.click();
-    return true;
-  }, publishAt.day);
-  if (!dateSelected) {
-    throw new Error(`视频号日期面板未找到可选的 ${publishAt.day} 日`);
-  }
+  await selectShipinhaoCalendarDay(page, publishAt);
   await page.waitForTimeout(300);
 
   const timeFocused = await page.evaluate(() => {
@@ -607,16 +732,30 @@ async function inspectAndOpenScheduleDialog(page, platform) {
   if (!result.ok) {
     throw new Error(`${platform}未找到官方「定时发布」入口：${JSON.stringify(result)}`);
   }
-  const clicked = await page.evaluate((id) => {
-    const target = document.getElementById(id);
-    if (!target || target.disabled) return false;
-    target.scrollIntoView({ block: "center", inline: "center" });
-    target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-    target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-    target.click();
-    return true;
-  }, result.id);
-  if (!clicked) throw new Error(`${platform}官方定时发布按钮点击失败`);
+  if (platform === "百家号") {
+    const box = await page.evaluate((id) => {
+      const target = document.getElementById(id);
+      if (!target || target.disabled) return null;
+      target.scrollIntoView({ block: "center", inline: "center" });
+      const rect = target.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, width: rect.width, height: rect.height };
+    }, result.id);
+    if (!box || box.width < 2 || box.height < 2) {
+      throw new Error("百家号官方定时发布按钮没有可点击区域");
+    }
+    await page.mouse.click(box.x, box.y, { delay: 80 });
+  } else {
+    const clicked = await page.evaluate((id) => {
+      const target = document.getElementById(id);
+      if (!target || target.disabled) return false;
+      target.scrollIntoView({ block: "center", inline: "center" });
+      target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      target.click();
+      return true;
+    }, result.id);
+    if (!clicked) throw new Error(`${platform}官方定时发布按钮点击失败`);
+  }
   await page.waitForTimeout(800);
   return result;
 }
@@ -637,7 +776,7 @@ async function setDialogSchedule(page, platform, publishAt) {
     };
     const selector = platformName === "头条"
       ? ".common-timing-picker"
-      : ".cheetah-modal-confirm";
+      : ".cheetah-modal-confirm, .cheetah-modal-content, [class*='timepublish']";
     return [...document.querySelectorAll(selector)].some(visible);
   }, platform);
   const dismissedGuide = await page.evaluate(() => {
@@ -709,12 +848,51 @@ async function setDialogSchedule(page, platform, publishAt) {
     const modal =
       document.querySelector(".common-timing-picker") ||
       document.querySelector("[class*='timing-picker']") ||
+      document.querySelector("[class*='timepublish']") ||
       document.querySelector(".cheetah-modal-confirm") ||
+      document.querySelector(".cheetah-modal-content") ||
       document.querySelector("[class*='schedule']");
     const modalHtml = modal ? String(modal.outerHTML || "").slice(0, 24000) : "";
     return { inputs, buttons, parts, modalHtml };
   });
   console.log(`[${platform === "头条" ? "tt" : "bjh"}] 官方定时弹窗状态:`, JSON.stringify(state));
+  if (platform === "百家号") {
+    const bjhPanelReady = async () => page.evaluate(() => {
+      const visible = (node) => {
+        if (!node) return false;
+        const style = window.getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+      };
+      const wrap = document.querySelector(".timepublish-wrap-select");
+      if (wrap && visible(wrap)) {
+        return [...wrap.querySelectorAll(".cheetah-select-selector")].filter(visible).length >= 3;
+      }
+      return ["select-date", "select-hour", "select-minute"].every((id) => {
+        const input = document.getElementById(id);
+        return input && visible(input.closest(".cheetah-select-selector") || input);
+      });
+    });
+    let ready = await bjhPanelReady();
+    for (let attempt = 1; attempt <= 3 && !ready && trigger.id; attempt += 1) {
+      console.log(`[bjh] 定时面板未出现，第 ${attempt} 次用鼠标重试点击定时发布`);
+      const box = await page.evaluate((id) => {
+        const target = document.getElementById(id);
+        if (!target) return null;
+        target.scrollIntoView({ block: "center", inline: "center" });
+        const rect = target.getBoundingClientRect();
+        return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, width: rect.width, height: rect.height };
+      }, trigger.id);
+      if (box && box.width > 2 && box.height > 2) {
+        await page.mouse.click(box.x, box.y, { delay: 80 });
+      }
+      await page.waitForTimeout(1000);
+      ready = await bjhPanelReady();
+    }
+    if (!ready) {
+      throw new Error(`百家号未找到日期下拉框：${JSON.stringify(state)}`);
+    }
+  }
   if (platform === "头条") {
     const selectValue = async (selector, value, label) => {
       const opened = await page.evaluate((targetSelector) => {
@@ -791,29 +969,39 @@ async function setDialogSchedule(page, platform, publishAt) {
     return;
   }
 
-  const selectBjhValue = async (index, expected, label) => {
+  const selectBjhValue = async (index, expectedList, label) => {
+    const expected = (Array.isArray(expectedList) ? expectedList : [expectedList])
+      .map((item) => String(item || "").replace(/\s+/g, "").trim())
+      .filter(Boolean);
     const targetInfo = await page.evaluate((targetIndex) => {
       const visible = (node) => {
+        if (!node) return false;
         const style = window.getComputedStyle(node);
         const rect = node.getBoundingClientRect();
         return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
       };
-      const modals = [...document.querySelectorAll(".cheetah-modal-confirm")].filter(visible);
-      const modal = modals[modals.length - 1];
-      const selectors = modal && [...modal.querySelectorAll(".timepublish-wrap-select .cheetah-select-selector")];
-      const target = selectors && selectors[targetIndex];
-      if (!target) return { id: "", current: "" };
+      const nativeIds = ["select-date", "select-hour", "select-minute"];
+      const input = document.getElementById(nativeIds[targetIndex]);
+      let target = input && (input.closest(".cheetah-select-selector") || input.closest(".cheetah-select"));
+      if (!target || !visible(target)) {
+        const wrap = document.querySelector(".timepublish-wrap-select");
+        const selectors = wrap
+          ? [...wrap.querySelectorAll(".cheetah-select-selector")].filter(visible)
+          : [];
+        target = selectors[targetIndex];
+      }
+      if (!target || !visible(target)) return { id: "", current: "" };
       const id = `__mm_bjh_schedule_select_${targetIndex}_${Date.now()}`;
-      target.id = id;
+      target.setAttribute("data-mm-bjh-select", id);
       return {
         id,
         current: String(target.querySelector(".cheetah-select-selection-item")?.textContent || "").trim(),
       };
     }, index);
     if (!targetInfo.id) throw new Error(`百家号未找到${label}下拉框`);
-    await page.click(`#${targetInfo.id}`, { delay: 100 });
+    await page.click(`[data-mm-bjh-select="${targetInfo.id}"]`, { delay: 100 });
     await page.waitForTimeout(500);
-    const picked = await page.evaluate((value) => {
+    const picked = await page.evaluate((values) => {
       const visible = (node) => {
         const style = window.getComputedStyle(node);
         const rect = node.getBoundingClientRect();
@@ -821,10 +1009,10 @@ async function setDialogSchedule(page, platform, publishAt) {
       };
       const norm = (text) => String(text || "").replace(/\s+/g, "").trim();
       const candidates = [...document.querySelectorAll(
-        ".cheetah-select-item-option, [role='option'], .cheetah-select-dropdown div"
+        ".cheetah-select-item-option, [role='option']"
       )].filter(visible);
       const target = candidates
-        .filter((node) => norm(node.textContent) === value)
+        .filter((node) => values.includes(norm(node.textContent)))
         .sort((a, b) => a.querySelectorAll("*").length - b.querySelectorAll("*").length)[0];
       if (!target) {
         return {
@@ -835,11 +1023,34 @@ async function setDialogSchedule(page, platform, publishAt) {
       target.click();
       return { ok: true };
     }, expected);
+    if (!picked.ok && index === 0) {
+      const calendarPicked = await page.evaluate((iso) => {
+        const visible = (node) => {
+          const style = window.getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+        };
+        const norm = (text) => String(text || "").replace(/\s+/g, "").trim();
+        const isoHit = [...document.querySelectorAll("[role='option'], .cheetah-select-item-option, li, td, span, div")]
+          .filter(visible)
+          .filter((node) => norm(node.textContent) === iso)
+          .sort((a, b) => a.querySelectorAll("*").length - b.querySelectorAll("*").length)[0];
+        if (isoHit) {
+          isoHit.click();
+          return true;
+        }
+        return false;
+      }, expected[0]);
+      if (calendarPicked) {
+        await page.waitForTimeout(250);
+        return;
+      }
+    }
     if (!picked.ok) {
-      const currentNumber = Number((targetInfo.current.match(/\d+/) || [])[0]);
-      const expectedNumber = Number((expected.match(/\d+/) || [])[0]);
+      const currentNumber = Number((String(targetInfo.current).match(/\d+/) || [])[0]);
+      const expectedNumber = Number((expected[0].match(/\d+/) || [])[0]);
       if (index === 0 || !Number.isFinite(currentNumber) || !Number.isFinite(expectedNumber)) {
-        throw new Error(`百家号${label}未找到选项 ${expected}：${JSON.stringify(picked.options)}`);
+        throw new Error(`百家号${label}未找到选项 ${expected.join("/")}：${JSON.stringify(picked.options)}`);
       }
       const key = expectedNumber < currentNumber ? "ArrowUp" : "ArrowDown";
       for (let step = 0; step < Math.abs(expectedNumber - currentNumber); step += 1) {
@@ -850,26 +1061,39 @@ async function setDialogSchedule(page, platform, publishAt) {
     await page.waitForTimeout(250);
   };
 
-  await selectBjhValue(0, `${Number(publishAt.full.slice(5, 7))}月${Number(publishAt.day)}日`, "日期");
-  await selectBjhValue(1, `${publishAt.hour}点`, "小时");
-  await selectBjhValue(2, `${publishAt.minuteValue}分`, "分钟");
+  const isoDate = `${publishAt.year}-${String(Number(publishAt.month)).padStart(2, "0")}-${String(Number(publishAt.day)).padStart(2, "0")}`;
+  const month = Number(publishAt.month);
+  const day = Number(publishAt.day);
+  const dateLabels = [
+    isoDate,
+    `${month}月${day}日`,
+    `${month}月${String(day).padStart(2, "0")}日`,
+    `${String(month).padStart(2, "0")}月${String(day).padStart(2, "0")}日`,
+  ];
+  await selectBjhValue(0, dateLabels, "日期");
+  await selectBjhValue(1, [`${publishAt.hour}点`, publishAt.hour], "小时");
+  await selectBjhValue(2, [`${publishAt.minuteValue}分`, `${String(Number(publishAt.minuteValue)).padStart(2, "0")}分`], "分钟");
   const actual = await page.evaluate(() => {
     const visible = (node) => {
       const style = window.getComputedStyle(node);
       const rect = node.getBoundingClientRect();
       return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
     };
-    const modals = [...document.querySelectorAll(".cheetah-modal-confirm")].filter(visible);
-    const modal = modals[modals.length - 1];
-    return modal
-      ? [...modal.querySelectorAll(".timepublish-wrap-select .cheetah-select-selection-item")]
+    const wrap = document.querySelector(".timepublish-wrap-select");
+    const items = wrap
+      ? [...wrap.querySelectorAll(".cheetah-select-selection-item")]
+          .filter(visible)
           .map((node) => String(node.textContent || "").replace(/\s+/g, "").trim())
-          .join("")
-      : "";
+      : [];
+    return items.slice(0, 3);
   });
-  const expected = `${Number(publishAt.full.slice(5, 7))}月${Number(publishAt.day)}日${publishAt.hour}点${publishAt.minuteValue}分`;
-  if (actual !== expected) {
-    throw new Error(`百家号定时发布时间校验失败，弹窗当前值为: ${actual || "空"}`);
+  const actualText = actual.join("");
+  const dateOk = dateLabels.includes(actual[0]);
+  const hourOk = actual[1] === `${publishAt.hour}点` || actual[1] === publishAt.hour;
+  const minuteOk = actual[2] === `${publishAt.minuteValue}分`
+    || actual[2] === `${String(Number(publishAt.minuteValue)).padStart(2, "0")}分`;
+  if (!dateOk || !hourOk || !minuteOk) {
+    throw new Error(`百家号定时发布时间校验失败，弹窗当前值为: ${actualText || "空"}`);
   }
   const confirmed = await page.evaluate(() => {
     const norm = (text) => String(text || "").replace(/\s+/g, "").trim();
@@ -878,11 +1102,19 @@ async function setDialogSchedule(page, platform, publishAt) {
       const rect = node.getBoundingClientRect();
       return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
     };
-    const modals = [...document.querySelectorAll(".cheetah-modal-confirm")].filter(visible);
-    const modal = modals[modals.length - 1];
-    const button = modal && [...modal.querySelectorAll("button")].find(
-      (node) => norm(node.textContent) === "定时发布"
-    );
+    const roots = [
+      ...document.querySelectorAll(
+        ".cheetah-modal-confirm, .cheetah-modal-content, [class*='timepublish']"
+      ),
+    ].filter(visible);
+    const searchRoots = roots.length ? roots : [document];
+    let button = null;
+    for (const root of searchRoots.reverse()) {
+      button = [...root.querySelectorAll("button")].find(
+        (node) => visible(node) && norm(node.textContent) === "定时发布"
+      );
+      if (button) break;
+    }
     if (!button || button.disabled) return false;
     button.click();
     return true;
