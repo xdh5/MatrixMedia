@@ -110,12 +110,18 @@ export function resolveCliSpawn(args: string[]): {
   const dir = process.env.MATRIXMEDIA_DIR ?? defaultDir;
   const env: NodeJS.ProcessEnv = { ...process.env };
 
+  const localElectronBin = process.platform === 'win32'
+    ? path.join(dir, 'node_modules', 'electron', 'dist', 'electron.exe')
+    : path.join(dir, 'node_modules', '.bin', 'electron');
+  const localRuntimeAvailable = fs.existsSync(localElectronBin);
   let installed = false;
-  try {
-    execSync('which matrixmedia', { stdio: 'pipe' });
-    installed = true;
-  } catch {
-    installed = false;
+  if (!localRuntimeAvailable) {
+    try {
+      execSync('which matrixmedia', { stdio: 'pipe' });
+      installed = true;
+    } catch {
+      installed = false;
+    }
   }
 
   if (installed) {
@@ -127,11 +133,8 @@ export function resolveCliSpawn(args: string[]): {
       delete env[key];
     }
   }
-  const electronBin = process.platform === 'win32'
-    ? path.join(dir, 'node_modules', 'electron', 'dist', 'electron.exe')
-    : path.join(dir, 'node_modules', '.bin', 'electron');
   return {
-    command: electronBin,
+    command: localElectronBin,
     // `--` 防止 Chromium 把 --partition / --tags 等 CLI 参数当成浏览器开关并直接崩溃
     spawnArgs: ['.', '--', 'cli', ...args],
     cwd: dir,

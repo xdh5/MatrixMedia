@@ -1,6 +1,6 @@
 "use strict";
 
-import { WAIT_SELECTOR_APPEAR_MS } from "./uploadTimeouts.js";
+import { WAIT_SELECTOR_APPEAR_MS, pollPageUntil } from "./uploadTimeouts.js";
 
 const OFFICIAL_SCHEDULE_PLATFORMS = new Set([
   "抖音",
@@ -65,10 +65,20 @@ function normalizePublishAt(value) {
 }
 
 async function replaceDateTimeInput(page, selector, value) {
-  await page.waitForSelector(selector, {
-    visible: true,
-    timeout: WAIT_SELECTOR_APPEAR_MS,
-  });
+  await pollPageUntil(
+    page,
+    (target) => {
+      const input = document.querySelector(target);
+      if (!input) return false;
+      const style = window.getComputedStyle(input);
+      const rect = input.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+    },
+    selector,
+    WAIT_SELECTOR_APPEAR_MS,
+    1500,
+    `未找到可见的官方定时发布时间输入框：${selector}`
+  );
   // 抖音和快手的日期输入框是 React 受控组件，部分页面还会设置 readonly。
   // 直接键盘输入会被日期面板的默认时间覆盖，因此使用原生 setter 并派发事件。
   await page.$eval(
@@ -1174,7 +1184,30 @@ export async function clickKuaishouScheduleConfirmation(page) {
   return false;
 }
 
-export async function waitForOfficialScheduleAccepted(page, platform, previousUrl) {
+async function confirmDouyinScheduledItem(page, expectedTitle) {
+  const title = String(expectedTitle || "").replace(/\s+/g, "").trim();
+  if (!title) return false;
+
+  const manageUrl = "https://creator.douyin.com/creator-micro/content/manage";
+  if (!page.url().includes("/content/manage")) {
+    await page.goto(manageUrl, { waitUntil: "domcontentloaded", timeout: WAIT_SCHEDULE_CONFIRM_MS });
+  }
+
+  try {
+    await page.waitForFunction((expected) => {
+      const norm = (text) => String(text || "").replace(/\s+/g, "").trim();
+      return [...document.querySelectorAll("body *")].some((element) => {
+        const text = norm(element.textContent);
+        return text === expected;
+      });
+    }, { timeout: WAIT_SCHEDULE_CONFIRM_MS }, title);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function waitForOfficialScheduleAccepted(page, platform, previousUrl, expectedTitle = "") {
   const deadline = Date.now() + WAIT_SCHEDULE_CONFIRM_MS;
   while (Date.now() < deadline) {
     const accepted = await page.evaluate((expectedUrl, platformName) => {
@@ -1218,6 +1251,15 @@ export async function waitForOfficialScheduleAccepted(page, platform, previousUr
       return false;
     }, previousUrl, platform).catch(() => false);
     if (accepted) return;
+
+    if (
+      platform === "抖音" &&
+      (page.url().includes("/creator-micro/home") || page.url().includes("/content/manage"))
+    ) {
+      const confirmed = await confirmDouyinScheduledItem(page, expectedTitle);
+      if (confirmed) return;
+      throw new Error(`抖音提交后未在作品管理找到对应作品：${expectedTitle || "标题为空"}`);
+    }
     await page.waitForTimeout(500);
   }
   const diagnostic = await page.evaluate(() => {

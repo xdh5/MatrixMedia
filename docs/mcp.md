@@ -80,7 +80,7 @@ cd mcp && npm install && npm run build
 
 | 参数         | 必填 | 说明                                      |
 | ------------ | ---- | ----------------------------------------- |
-| `platform`   | 是   | 仅 `dy` / `sph`                           |
+| `platform`   | 是   | `dy` / `sph` / `ks`                       |
 | `phone`      | 是   | 与 `list_accounts` / `publish_video` 一致 |
 | `timeoutSec` | 否   | 等待扫码秒数，默认 900                    |
 
@@ -148,7 +148,7 @@ cd mcp && npm install && npm run build
 ## 登录说明
 
 - 发布前用 `list_accounts` 看登录态。
-- **抖音 / 视频号未登录**：调用 `login(platform, phone)`。工具会打开登录页、截取二维码，并以图片返回。Agent 必须把这张图发给用户扫码，然后反复调用 `login_status(login_id)`，直到 `status=success`，再 `publish_video`。
+- **抖音 / 视频号 / 快手未登录**：调用 `login(platform, phone)`。工具会打开登录页、截取二维码，并以图片返回。Agent 必须把这张图发给用户扫码，然后反复调用 `login_status(login_id)`，直到 `status=success`，再 `publish_video`。
 - **其它平台未登录**：请用户在矩媒 GUI 扫码登录；MCP 无法弹窗。
 - `login` 与 GUI / `publish_video` 共用同一 session partition。
 

@@ -7,11 +7,14 @@ const PLATFORM_ALIASES = {
   sph: '视频号',
   shipin: '视频号',
   shipinhao: '视频号',
-  视频号: '视频号'
+  视频号: '视频号',
+  ks: '快手',
+  kuaishou: '快手',
+  快手: '快手'
 }
 
-/** 当前支持抖音、视频号扫码登录 */
-const SUPPORTED_LOGIN = ['抖音', '视频号']
+/** 当前支持抖音、视频号、快手扫码登录 */
+const SUPPORTED_LOGIN = ['抖音', '视频号', '快手']
 
 /**
  * 解析 `cli login` 后的 argv（不含子命令名 login）
@@ -67,7 +70,7 @@ export function parseLoginArgs(subArgv) {
   if (!out.platform) {
     return {
       ok: false,
-      error: '缺少 --platform（或 -p），抖音请使用 dy / 抖音，视频号请使用 sph / 视频号'
+      error: '缺少 --platform（或 -p），支持 dy / 抖音、sph / 视频号、ks / 快手'
     }
   }
   const raw = String(out.platform).trim()
@@ -76,7 +79,7 @@ export function parseLoginArgs(subArgv) {
   if (!SUPPORTED_LOGIN.includes(pt)) {
     return {
       ok: false,
-      error: `cli login 当前支持抖音和视频号，收到: ${out.platform}。其它平台请先用 GUI 登录或后续再扩展。`
+      error: `cli login 当前支持抖音、视频号和快手，收到: ${out.platform}。其它平台请先用 GUI 登录或后续再扩展。`
     }
   }
   out.platform = pt
@@ -127,7 +130,7 @@ export function loginHelpText() {
   return `
 用法: <应用> cli login [选项]
 
-与 GUI 共用同一 session partition（Cookie 持久化）。当前支持抖音、视频号。
+与 GUI 共用同一 session partition（Cookie 持久化）。当前支持抖音、视频号、快手。
 
 终端扫码（默认）：同一 Electron 窗口 + puppeteer-in-electron 的 CDP 截图（page.screenshot），无需屏外坐标。Linux 无图形环境或 SSH 建议用 xvfb-run -a 包一层。
 
@@ -136,7 +139,7 @@ export function loginHelpText() {
 视频号登录支持 --show 弹出登录窗口，扫码后窗口自动关闭。
 
 选项:
-  -p, --platform <id>   支持 dy / 抖音、sph / 视频号
+  -p, --platform <id>   支持 dy / 抖音、sph / 视频号、ks / 快手
       --phone <id>      账号手机号（与 GUI 一致，与 --partition 二选一）
       --partition <p>   完整 partition，如 persist:13800138000抖音
       --show              弹出登录窗口（视频号默认支持；抖音 CLI 不支持）
@@ -161,5 +164,6 @@ export function loginHelpText() {
   xvfb-run -a ./矩媒.AppImage cli login -p dy --phone 13800138000
   electron . cli login -p dy --phone 13800138000 --puppeteer-headless
   矩媒.exe cli login -p dy --phone 13800138000
+  矩媒.exe cli login -p ks --phone 心灵鸡汤 --save-qr-png kuaishou-login.png
 `.trim()
 }

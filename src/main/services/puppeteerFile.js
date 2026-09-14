@@ -28,6 +28,9 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 const puppeteer = addExtra(puppeteerCore);
 puppeteer.use(StealthPlugin());
 
+// 同一账号连续发布时复用浏览器窗口，避免每条视频重新建立登录会话。
+const reusablePublishSessions = new Map();
+
 /**
  * IPC 事件适配为与 CLI 共用的 transport（仅依赖 .reply）
  */
@@ -276,6 +279,16 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
       clearTimeout(autoCloseTimer);
       autoCloseTimer = null;
     }
+    if (data.reuseSessionKey && !data.reuseSessionFinal) {
+      reusablePublishSessions.set(data.reuseSessionKey, {
+        browser: activeBrowser,
+        win: activeWin,
+      });
+      activeBrowser = null;
+      activeWin = null;
+      return;
+    }
+    if (data.reuseSessionKey) reusablePublishSessions.delete(data.reuseSessionKey);
     if (activeBrowser) {
       try {
         activeBrowser.disconnect();
@@ -542,9 +555,15 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
         );
       }
 
-      browser = await pie.connect(app, puppeteer);
-      activeBrowser = browser;
-      win = new BrowserWindow({
+      const reusable = data.reuseSessionKey && reusablePublishSessions.get(data.reuseSessionKey);
+      if (reusable && reusable.win && !reusable.win.isDestroyed()) {
+        browser = reusable.browser;
+        win = reusable.win;
+        page = await pie.getPage(browser, win);
+        reusablePublishSessions.delete(data.reuseSessionKey);
+      } else {
+        browser = await pie.connect(app, puppeteer);
+        win = new BrowserWindow({
         show: isXhsTask
           ? true
           : data.mmCliSuppressWindow
@@ -563,10 +582,12 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
           devTools: true,
           backgroundThrottling: false,
         },
-      });
+        });
+        page = await pie.getPage(browser, win);
+      }
       activeWin = win;
+      activeBrowser = browser;
       openPublishWindows.add(win);
-      page = await pie.getPage(browser, win);
 
       // 注入反自动化检测脚本（在页面 JS 执行前生效）
       // 解决小红书等平台判定 Electron 为 "AI 自动化" 的问题

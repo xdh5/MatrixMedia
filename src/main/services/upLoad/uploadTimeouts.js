@@ -28,10 +28,15 @@ export const CLI_PUBLISH_TIMEOUT_MS = 4 * 60 * 60 * 1000;
  * @param {number} [stepMs=2000]
  * @param {string} [timeoutMessage] 超时时的 Error.message
  */
-export async function pollPageUntil(page, pageFn, totalMs, stepMs = 2000, timeoutMessage) {
+export async function pollPageUntil(page, pageFn, argsOrTotalMs, totalOrStepMs, stepOrMessage, maybeMessage) {
+  const hasArgs = typeof argsOrTotalMs !== "number";
+  const args = hasArgs ? argsOrTotalMs : undefined;
+  const totalMs = hasArgs ? totalOrStepMs : argsOrTotalMs;
+  const stepMs = hasArgs ? (stepOrMessage ?? 2000) : (totalOrStepMs ?? 2000);
+  const timeoutMessage = hasArgs ? maybeMessage : stepOrMessage;
   const deadline = Date.now() + totalMs;
   while (Date.now() < deadline) {
-    const ok = await page.evaluate(pageFn).catch(() => false);
+    const ok = await page.evaluate(pageFn, args).catch(() => false);
     if (ok) return;
     await page.waitForTimeout(stepMs);
   }

@@ -523,7 +523,16 @@ export async function runSphCliLogin({
         }
         qrTimer = setInterval(() => {
           if (settled || !piePage) return;
-          paintSphLoginQr(piePage, paintOpts).catch(() => {});
+          // 二维码过期后页面通常只显示“刷新二维码/点击刷新”，先点击再截取新图。
+          piePage
+            .evaluate(() => {
+              const nodes = Array.from(document.querySelectorAll("button,a,div,span,p"));
+              const target = nodes.find((el) => /刷新二维码|点击刷新|重新获取/.test((el.textContent || "").trim()));
+              if (target) { target.click(); return true; }
+              return false;
+            })
+            .catch(() => false)
+            .finally(() => paintSphLoginQr(piePage, paintOpts).catch(() => {}));
         }, CLI_LOGIN_QR_REFRESH_MS);
         // 首次延迟稍长，等 iframe 加载
         setTimeout(() => {

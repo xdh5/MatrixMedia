@@ -182,6 +182,8 @@ async function runSingleFilePublishInner(
     filePath: resolvedFile,
     pt: v.platform,
     useRealBrowser: Boolean(v.useRealBrowser),
+    reuseSessionKey: v.reuseSessionKey || "",
+    reuseSessionFinal: v.reuseSessionFinal === true,
   };
 
   const taskId = taskPayload.taskId;
@@ -484,7 +486,13 @@ export async function runMultiPlatformPublish(parsedList) {
   };
 
   try {
-    for (const item of sortPublishPlatforms(parsedList)) {
+    const orderedItems = sortPublishPlatforms(parsedList);
+    for (let itemIndex = 0; itemIndex < orderedItems.length; itemIndex += 1) {
+      const item = orderedItems[itemIndex];
+      if (item.platform === "抖音") {
+        item.reuseSessionKey = `douyin:${item.phone || item.partition || "default"}`;
+        item.reuseSessionFinal = !orderedItems.slice(itemIndex + 1).some((next) => next.platform === "抖音");
+      }
       const waitForOfficialSchedule = Boolean(
         item.publishAt && supportsOfficialSchedule(item.platform)
       );

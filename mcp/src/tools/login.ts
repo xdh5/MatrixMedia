@@ -5,7 +5,7 @@ import type { ChildProcess } from "node:child_process";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { spawnCli } from "../runner.js";
 
-const LOGIN_PLATFORMS = ["dy", "sph"] as const;
+const LOGIN_PLATFORMS = ["dy", "sph", "ks"] as const;
 type LoginPlatform = (typeof LOGIN_PLATFORMS)[number];
 
 export type McpContent =
@@ -33,9 +33,9 @@ function asNonEmpty(value: unknown, name: string): string {
 
 function asPlatform(value: unknown): LoginPlatform {
   const platform = asNonEmpty(value, "platform");
-  if (platform !== "dy" && platform !== "sph") {
+  if (platform !== "dy" && platform !== "sph" && platform !== "ks") {
     throw new Error(
-      "login 目前只支持抖音 dy 和视频号 sph。其它平台请在矩媒 GUI 里扫码登录后再 publish_video。"
+      "login 目前只支持抖音 dy、视频号 sph 和快手 ks。其它平台请在矩媒 GUI 里扫码登录后再 publish_video。"
     );
   }
   return platform;
@@ -113,15 +113,15 @@ function withQr(session: LoginSession, text: string): McpContent[] {
 export const loginTool: Tool = {
   name: "login",
   description:
-    "打开抖音或视频号扫码登录页，截取二维码图片返回给 Agent。Agent 必须把 qr_path 同时写入最终回复的 Markdown 图片和可点击文件链接，禁止只依赖会折叠的工具输出；随后结束当前对话。用户确认扫码后再用 login_status 查询，直到 success 再 publish_video。" +
-    "仅支持 platform=dy / sph。其它平台请让用户在矩媒 GUI 登录。",
+    "打开抖音、视频号或快手扫码登录页，截取二维码图片返回给 Agent。Agent 必须把 qr_path 同时写入最终回复的 Markdown 图片和可点击文件链接，禁止只依赖会折叠的工具输出；随后结束当前对话。用户确认扫码后再用 login_status 查询，直到 success 再 publish_video。" +
+    "仅支持 platform=dy / sph / ks。其它平台请让用户在矩媒 GUI 登录。",
   inputSchema: {
     type: "object",
     properties: {
       platform: {
         type: "string",
-        enum: ["dy", "sph"],
-        description: "dy=抖音，sph=视频号",
+        enum: ["dy", "sph", "ks"],
+        description: "dy=抖音，sph=视频号，ks=快手",
       },
       phone: {
         type: "string",

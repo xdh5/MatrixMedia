@@ -511,6 +511,10 @@ export async function runCliMain(argv = process.argv) {
       if (v.platform === "视频号") {
         return await runSphCliLogin(loginOpts);
       }
+      if (v.platform === "快手") {
+        const { runKsCliLogin } = await import("../services/cliLogin/ksCliLogin.js");
+        return await runKsCliLogin(loginOpts);
+      }
       return await runDouyinCliLogin(loginOpts);
     } catch (e) {
       console.error(e);

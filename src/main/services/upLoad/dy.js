@@ -306,7 +306,7 @@ export default async function (page, data, window, event) {
     const previousUrl = page.url();
     await clickDyPublish(page, isDraftMode);
     if (isOfficialSchedule) {
-      await waitForOfficialScheduleAccepted(page, "抖音", previousUrl);
+      await waitForOfficialScheduleAccepted(page, "抖音", previousUrl, data.title);
     }
     console.log(
       isDraftMode
