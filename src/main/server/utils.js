@@ -81,6 +81,17 @@ function generateId() {
   return Date.now() + "" + Math.floor(Math.random() * 1000);
 }
 
+function isProcessAlive(pid) {
+  const value = Number(pid);
+  if (!Number.isInteger(value) || value <= 0) return false;
+  try {
+    process.kill(value, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function recordValue(value) {
   return String(value || "");
 }
@@ -192,13 +203,36 @@ function changeData({ item, fileName, type }) {
           list.push(newItem);
         } else {
           const oldItem = list[duplicateIndex] || {};
+          const oldProcessId = Number(oldItem.publishProcessId);
+          const newProcessId = Number(newItem.publishProcessId);
+          if (
+            oldItem.publishStatus === "publishing" &&
+            oldProcessId > 0 &&
+            oldProcessId !== newProcessId &&
+            isProcessAlive(oldProcessId)
+          ) {
+            return {
+              success: false,
+              code: "PUBLISH_ALREADY_RUNNING",
+              message: `相同视频已有发布进程正在运行（PID ${oldProcessId}），已拒绝重复发布`,
+              data: list,
+            };
+          }
           const attemptCount = (Number(oldItem.publishAttemptCount) || 1) + 1;
           list[duplicateIndex] = {
             ...oldItem,
+            ...newItem,
+            id: oldItem.id,
+            createTime: oldItem.createTime,
             publishAttemptCount: attemptCount,
             republishCount: Math.max(0, attemptCount - 1),
             publishStatus: "publishing",
-            lastPublishMessage: "重新发布中",
+            publishSuccessCount: Number(oldItem.publishSuccessCount) || 0,
+            publishFailCount: Number(oldItem.publishFailCount) || 0,
+            lastPublishMessage:
+              oldItem.publishStatus === "publishing"
+                ? "检测到上次发布进程已退出，正在恢复发布"
+                : "重新发布中",
             lastPublishAt: Date.now(),
           };
         }

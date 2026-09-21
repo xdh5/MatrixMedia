@@ -238,6 +238,7 @@ async function runSingleFilePublishInner(
         ? "等待保存草稿结果"
         : "等待发布结果",
     lastPublishAt: Date.now(),
+    publishProcessId: process.pid,
   };
 
   let recordId = null;
@@ -247,6 +248,13 @@ async function runSingleFilePublishInner(
       type: "add",
       item: recordItem,
     });
+    if (addRes && addRes.success === false) {
+      return {
+        exitCode: 1,
+        status: "failed",
+        message: addRes.message || "写入发布任务失败",
+      };
+    }
     if (addRes && addRes.success && Array.isArray(addRes.data)) {
       const found = [...addRes.data]
         .reverse()
@@ -278,6 +286,7 @@ async function runSingleFilePublishInner(
           publishFailCount: status === "failed" ? 1 : 0,
           lastPublishMessage: message || "",
           lastPublishAt: Date.now(),
+          publishProcessId: null,
         },
       });
     } catch (e) {
@@ -367,7 +376,21 @@ async function runSingleFilePublishInner(
       },
     };
 
-    runPuppeteerTask(taskPayload, transport, () => {});
+    try {
+      runPuppeteerTask(taskPayload, transport, () => {});
+    } catch (error) {
+      const message = `启动发布自动化失败：${
+        error && error.message ? error.message : String(error)
+      }`;
+      console.error(message);
+      updateRecord("failed", message);
+      finish({
+        exitCode: 1,
+        status: "failed",
+        message,
+        id: recordId,
+      });
+    }
     if (!waitForResult) {
       resolve({
         exitCode: 0,
