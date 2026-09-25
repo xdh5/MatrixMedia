@@ -30,19 +30,69 @@ const QR_SELECTORS = [
   "img",
 ];
 
-async function captureKsQr(page, saveQrPngPath) {
-  const refreshed = await page.evaluate(() => {
-    const nodes = Array.from(document.querySelectorAll("button,a,div,span,p"));
-    const target = nodes.find((element) =>
-      String(element.textContent || "").trim() === "点击刷新" &&
-      element.getBoundingClientRect().width > 0 &&
-      element.getBoundingClientRect().height > 0
+async function openKsQrPanel(page) {
+  await page.waitForFunction(
+    () => Array.from(document.querySelectorAll("button,a,div,span"))
+      .some((element) => String(element.textContent || "").trim() === "立即登录"),
+    { timeout: 15000 }
+  );
+  const clicked = await page.evaluate(() => {
+    const candidates = Array.from(document.querySelectorAll("button,a,div,span,p"));
+    const target = candidates.find(
+      (element) => String(element.textContent || "").trim() === "立即登录" &&
+        element.getBoundingClientRect().width > 0 &&
+        element.getBoundingClientRect().height > 0
     );
     if (!target) return false;
     target.click();
     return true;
-  }).catch(() => false);
-  if (refreshed) await new Promise((resolve) => setTimeout(resolve, 800));
+  });
+  if (!clicked) throw new Error("未找到快手立即登录按钮");
+  await page.waitForSelector(".platform-switch", { timeout: 15000 });
+  await page.click(".platform-switch");
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+}
+
+async function captureKsQr(page, saveQrPngPath) {
+  let refreshed = false;
+  for (const frame of page.frames()) {
+    const refreshNode = await frame.$x("//*[normalize-space(text())='点击刷新']")
+      .then((nodes) => nodes.find(Boolean) || null)
+      .catch(() => null);
+    if (!refreshNode) continue;
+    refreshed = await refreshNode.click({ delay: 80 }).then(() => true).catch(() => false);
+    if (!refreshed) refreshed = await refreshNode.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return false;
+      const clickable = element.closest("button,a,[role='button']") || element;
+      clickable.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }));
+      clickable.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, view: window }));
+      clickable.click();
+      return true;
+    }).catch(() => false);
+    if (refreshed) break;
+  }
+  if (refreshed) {
+    await page.waitForFunction(() => {
+      const nodes = Array.from(document.querySelectorAll("button,a,div,span,p"));
+      return !nodes.some((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 &&
+          ["点击刷新", "二维码已失效"].includes(String(element.textContent || "").trim());
+      });
+    }, { timeout: 5000, polling: 200 }).catch(() => null);
+  }
+  const expired = await page.evaluate(() =>
+    Array.from(document.querySelectorAll("button,a,div,span,p")).some((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 &&
+        ["点击刷新", "二维码已失效"].includes(String(element.textContent || "").trim());
+    })
+  ).catch(() => false);
+  if (expired) {
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 20000 });
+    await openKsQrPanel(page);
+  }
   for (const frame of page.frames()) {
     for (const selector of QR_SELECTORS) {
       const nodes = await frame.$$(selector).catch(() => []);
@@ -50,10 +100,12 @@ async function captureKsQr(page, saveQrPngPath) {
         const size = await node.evaluate((element) => {
           const rect = element.getBoundingClientRect();
           const style = window.getComputedStyle(element);
+          const containerText = String(element.parentElement?.textContent || "");
           return {
             width: rect.width,
             height: rect.height,
-            visible: rect.width >= 100 && rect.height >= 100 && style.visibility !== "hidden",
+            visible: rect.width >= 100 && rect.height >= 100 && style.visibility !== "hidden" &&
+              !containerText.includes("二维码已失效") && !containerText.includes("点击刷新"),
           };
         }).catch(() => null);
         if (!size || !size.visible || Math.abs(size.width - size.height) > 80) continue;
@@ -155,26 +207,7 @@ export async function runKsCliLogin({
       page = await pie.getPage(browser, win);
       if (show && !saveQrPngPath) win.show();
 
-      await page.waitForFunction(
-        () => Array.from(document.querySelectorAll("button,a,div,span"))
-          .some((element) => String(element.textContent || "").trim() === "立即登录"),
-        { timeout: 15000 }
-      );
-      const clicked = await page.evaluate(() => {
-        const candidates = Array.from(document.querySelectorAll("button,a,div,span,p"));
-        const target = candidates.find(
-          (element) => String(element.textContent || "").trim() === "立即登录" &&
-            element.getBoundingClientRect().width > 0 &&
-            element.getBoundingClientRect().height > 0
-        );
-        if (!target) return false;
-        target.click();
-        return true;
-      });
-      if (!clicked) throw new Error("未找到快手立即登录按钮");
-      await page.waitForSelector(".platform-switch", { timeout: 15000 });
-      await page.click(".platform-switch");
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await openKsQrPanel(page);
 
       if (saveQrPngPath) {
         const refreshQr = () => captureKsQr(page, saveQrPngPath).catch(() => false);
