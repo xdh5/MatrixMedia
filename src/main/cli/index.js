@@ -515,6 +515,10 @@ export async function runCliMain(argv = process.argv) {
         const { runKsCliLogin } = await import("../services/cliLogin/ksCliLogin.js");
         return await runKsCliLogin(loginOpts);
       }
+      if (v.platform === "头条") {
+        const { runTtCliLogin } = await import("../services/cliLogin/ttCliLogin.js");
+        return await runTtCliLogin(loginOpts);
+      }
       return await runDouyinCliLogin(loginOpts);
     } catch (e) {
       console.error(e);
@@ -592,9 +596,10 @@ export async function runCliMain(argv = process.argv) {
         })
       );
       console.error(result.message || "登录态异常或未登录");
-      if (v.platform === "抖音") {
+      if (v.platform === "抖音" || v.platform === "快手" || v.platform === "视频号" || v.platform === "头条") {
+        const loginPlatform = { 抖音: "dy", 快手: "ks", 视频号: "sph", 头条: "tt" }[v.platform];
         console.error(
-          "提示: 可先执行 cli login -p dy --phone <手机号> 在本机完成扫码登录。"
+          `提示: 可先执行 cli login -p ${loginPlatform} --phone <账号> 在本机完成扫码登录。`
         );
       }
     } else if (result.message) {
