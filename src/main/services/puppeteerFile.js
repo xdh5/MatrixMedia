@@ -563,8 +563,9 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
         reusablePublishSessions.delete(data.reuseSessionKey);
       } else {
         browser = await pie.connect(app, puppeteer);
+        const showSphWindow = String(data.pt || "").includes("视频");
         win = new BrowserWindow({
-        show: isXhsTask
+        show: isXhsTask || showSphWindow
           ? true
           : data.mmCliSuppressWindow
           ? false

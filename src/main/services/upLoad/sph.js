@@ -405,11 +405,14 @@ async function waitSphUploadProcessing(page) {
           const rect = node.getBoundingClientRect();
           return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0;
         })
-        .map((node) =>
-          String(node.getAttribute("aria-valuenow") || node.textContent || "").trim()
-        );
+        .map((node) => {
+          const aria = node.getAttribute("aria-valuenow");
+          if (aria !== null && aria !== "" && Number(aria) < 100) return "0%";
+          const matched = String(node.textContent || "").match(/(\d+(?:\.\d+)?)\s*%/);
+          return matched ? `${matched[1]}%` : "";
+        });
       if (progressTexts.some((text) => {
-        const match = text.match(/(\d+(?:\.\d+)?)\s*%?/);
+        const match = text.match(/(\d+(?:\.\d+)?)\s*%/);
         return match && Number(match[1]) < 100;
       })) {
         return false;

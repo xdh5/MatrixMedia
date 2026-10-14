@@ -63,6 +63,9 @@ if (!cliMode) {
   }
 }
 
+// 视频号要先在本地解码才能开始上传。命令行若带 --disable-gpu，
+// <video> 会停在 readyState 0，上传进度一直是 0%。
+app.commandLine.removeSwitch("disable-gpu");
 app.commandLine.appendSwitch("disable-features", "OutOfBlinkCors");
 
 if (!cliMode) {
