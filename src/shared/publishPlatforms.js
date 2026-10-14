@@ -23,7 +23,7 @@ export const PLATFORM_ALIASES = {
   小红书: "小红书",
 };
 
-/** HTTP / CLI 视频发布支持的全部平台（canonical 中文名） */
+/** CLI 视频发布支持的全部平台（canonical 中文名） */
 export const VIDEO_PUBLISH_CANONICAL = [
   "抖音",
   "视频号",
@@ -32,17 +32,6 @@ export const VIDEO_PUBLISH_CANONICAL = [
   "头条",
   "快手",
   "小红书",
-];
-
-/** 文档用：每个平台的主推荐 code 与自动化说明 */
-export const VIDEO_PUBLISH_PLATFORM_DOCS = [
-  { code: "dy", name: "抖音", aliases: ["douyin", "抖音"], automated: true },
-  { code: "sph", name: "视频号", aliases: ["视频号"], automated: true },
-  { code: "blbl", name: "哔哩哔哩", aliases: ["bilibili", "哔哩哔哩"], automated: true },
-  { code: "bjh", name: "百家号", aliases: ["百家号"], automated: true },
-  { code: "tt", name: "头条", aliases: ["toutiao", "头条"], automated: true },
-  { code: "ks", name: "快手", aliases: ["kuaishou", "快手"], automated: true },
-  { code: "xhs", name: "小红书", aliases: ["xiaohongshu", "小红书"], automated: true },
 ];
 
 /**
@@ -54,27 +43,4 @@ export function resolvePublishPlatform(raw) {
   if (!trimmed) return "";
   const lower = trimmed.toLowerCase();
   return PLATFORM_ALIASES[trimmed] || PLATFORM_ALIASES[lower] || trimmed;
-}
-
-/**
- * @param {string} canonical
- * @returns {boolean}
- */
-export function isVideoPublishPlatform(canonical) {
-  return VIDEO_PUBLISH_CANONICAL.includes(canonical);
-}
-
-/**
- * 供 HTTP GET /platforms 与文档生成
- * @param {Record<string, unknown>} [ptConfig]
- */
-export function getVideoPublishPlatformList(ptConfig) {
-  return VIDEO_PUBLISH_PLATFORM_DOCS.map((item) => ({
-    code: item.code,
-    name: item.name,
-    aliases: item.aliases,
-    automated: item.automated,
-    note: item.note || null,
-    hasConfig: ptConfig ? !!ptConfig[item.name] : null,
-  }));
 }

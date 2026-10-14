@@ -1,7 +1,5 @@
 'use strict'
 
-process.env.BABEL_ENV = 'main'
-
 const path = require('path')
 const { dependencies } = require('../package.json')
 const webpack = require('webpack')
@@ -21,8 +19,7 @@ let mainConfig = {
   },
   externals: [
     ...Object.keys(dependencies || {}),
-    'electron',
-    'electron-devtools-installer'
+    'electron'
   ],
   module: {
     rules: [

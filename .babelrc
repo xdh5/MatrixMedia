@@ -1,7 +1,0 @@
-{
-    "comments": false,
-    "plugins": [
-        "@babel/transform-runtime",
-        "@babel/plugin-syntax-dynamic-import"
-    ]
-}

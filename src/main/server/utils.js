@@ -1,7 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const https = require("https");
-const http = require("http");
 const moment = require("moment"); // 引入日期处理库
 
 /**
