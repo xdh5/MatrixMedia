@@ -24,7 +24,7 @@ function walkUpForMatrixRoot(start) {
   return "";
 }
 
-const ACCOUNT_GROUPS = new Set(["finance", "korean"]);
+export const ACCOUNT_GROUPS = new Set(["finance", "korean", "chinese"]);
 
 /** 从命令行取出本次要使用的账号组。登录数据按 data/<账号组>/ 分开存放。 */
 export function accountGroupFromArgv(argv = process.argv) {

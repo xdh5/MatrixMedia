@@ -12,8 +12,11 @@ import { runAccountsCli } from "./runAccountsCli";
 import ptConfig from "../config/ptConfig";
 import { runPuppeteerTask } from "../services/puppeteerFile";
 import { runDouyinCliLogin } from "../services/cliLogin/douyinCliLogin";
+import { runOfficialLogin } from "../services/officialLogin";
 import { runSphCliLogin } from "../services/cliLogin/sphCliLogin";
 import { runSingleFilePublish } from "../services/publishVideo";
+import { isOfficialPlatform, officialPlatformFromArgv, runOfficialPython } from "../services/officialPython";
+import { writeCliJson } from "./cliStdout";
 import { CLI_PUBLISH_TIMEOUT_MS } from "../services/upLoad/uploadTimeouts.js";
 import { resolveAccountPublishMode } from "../services/accountPublishSettingsResolver.js";
 
@@ -358,6 +361,12 @@ export async function runCliMain(argv = process.argv) {
     }
     const v = parsed.value;
     try {
+      if (v.official) {
+        return await runOfficialLogin({
+          ...v,
+          timeoutMs: v.timeoutSec * 1000,
+        });
+      }
       const loginOpts = {
         partition: v.partition,
         show: v.show,
@@ -387,6 +396,15 @@ export async function runCliMain(argv = process.argv) {
   }
 
   if (cmd === "publish") {
+    if (isOfficialPlatform(officialPlatformFromArgv(sub.slice(1)))) {
+      try {
+        writeCliJson(runOfficialPython(sub.slice(1)));
+        return 0;
+      } catch (error) {
+        console.error(error && error.message ? error.message : error);
+        return 1;
+      }
+    }
     const parsed = parsePublishArgs(sub.slice(1));
     if (!parsed.ok) {
       console.error(parsed.error);

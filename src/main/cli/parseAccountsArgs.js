@@ -31,6 +31,7 @@ export function parseAccountsArgs(subArgv) {
     platform: null,
     phone: null,
     json: false,
+    official: false,
     onlyLoggedIn: false,
     onlyLoggedOut: false,
   };
@@ -43,6 +44,8 @@ export function parseAccountsArgs(subArgv) {
       out.phone = args[++i];
     } else if (a === "--json") {
       out.json = true;
+    } else if (a === "--official") {
+      out.official = true;
     } else if (a === "--logged-in") {
       out.onlyLoggedIn = true;
     } else if (a === "--logged-out") {
@@ -56,7 +59,7 @@ export function parseAccountsArgs(subArgv) {
     return { ok: false, error: "--logged-in 与 --logged-out 互斥" };
   }
 
-  if (out.platform) {
+  if (out.platform && !out.official) {
     const raw = String(out.platform).trim();
     const pt = PLATFORM_ALIASES[raw] || PLATFORM_ALIASES[raw.toLowerCase()] || raw;
     if (!CANONICAL.includes(pt)) {

@@ -1,5 +1,20 @@
 'use strict'
 
+import { ACCOUNT_GROUPS } from "../services/matrixDataPaths";
+
+const OFFICIAL_ALIASES = {
+  youtube: 'youtube',
+  yt: 'youtube',
+  ytb: 'youtube',
+  tiktok: 'tiktok',
+  tk: 'tiktok',
+  instagram: 'instagram',
+  ig: 'instagram',
+  ins: 'instagram',
+  facebook: 'facebook',
+  fb: 'facebook'
+}
+
 const PLATFORM_ALIASES = {
   dy: '抖音',
   douyin: '抖音',
@@ -39,7 +54,10 @@ export function parseLoginArgs(subArgv) {
     timeoutSec: 900,
     saveQrPng: null,
     puppeteerHeadless: false,
-    force: false
+    force: false,
+    clientSecretPath: null,
+    apiKey: null,
+    profile: null
   }
 
   for (let i = 0; i < args.length; i++) {
@@ -68,17 +86,37 @@ export function parseLoginArgs(subArgv) {
       out.puppeteerHeadless = true
     } else if (a === '--force') {
       out.force = true
+    } else if (a === '--client-secret') {
+      out.clientSecretPath = args[++i] || null
+    } else if (a === '--api-key') {
+      out.apiKey = args[++i] || null
+    } else if (a === '--profile') {
+      out.profile = args[++i] || null
     }
   }
 
   if (!out.platform) {
     return {
       ok: false,
-      error: '缺少 --platform（或 -p），支持 dy / 抖音、sph / 视频号、ks / 快手、tt / 头条'
+      error: '缺少 --platform（或 -p）。扫码支持 dy / sph / ks / tt；官方登录支持 youtube / tiktok / instagram / facebook'
     }
   }
   const raw = String(out.platform).trim()
   const lower = raw.toLowerCase()
+  const official = OFFICIAL_ALIASES[lower]
+  if (official) {
+    const group = String(out.phone || '').split('-')[0]
+    if (!ACCOUNT_GROUPS.has(group)) {
+      return {
+        ok: false,
+        error: '官方登录必须用 --phone 指定账号组：finance、korean 或 chinese'
+      }
+    }
+    out.platform = official
+    out.phone = group
+    out.official = true
+    return { ok: true, value: out }
+  }
   const pt = PLATFORM_ALIASES[raw] || PLATFORM_ALIASES[lower] || raw
   if (!SUPPORTED_LOGIN.includes(pt)) {
     return {
@@ -134,7 +172,15 @@ export function loginHelpText() {
   return `
 用法: <应用> cli login [选项]
 
-Cookie 保存在 MatrixMedia 目录的 data 中。当前支持抖音、视频号、快手、头条。
+扫码登录的 Cookie 保存在 data/<账号组>。当前支持抖音、视频号、快手、头条。
+YouTube 走 Google 官方授权，TikTok、Instagram、Facebook 走 Zernio。凭据写入 data/<账号组>/.env。
+
+官方登录示例:
+  electron . cli login -p youtube --phone chinese
+  electron . cli login -p youtube --phone chinese --client-secret client_secret.json
+  electron . cli login -p tiktok --phone chinese
+  electron . cli login -p instagram --phone chinese
+  electron . cli login -p facebook --phone chinese --api-key <Zernio key>
 
 终端扫码（默认）：同一 Electron 窗口 + puppeteer-in-electron 的 CDP 截图（page.screenshot），无需屏外坐标。Linux 无图形环境或 SSH 建议用 xvfb-run -a 包一层。
 
@@ -143,8 +189,11 @@ Cookie 保存在 MatrixMedia 目录的 data 中。当前支持抖音、视频号
 视频号登录支持 --show 弹出登录窗口，扫码后窗口自动关闭。
 
 选项:
-  -p, --platform <id>   支持 dy / 抖音、sph / 视频号、ks / 快手、tt / 头条
-      --phone <id>      账号手机号（与 --partition 二选一）
+  -p, --platform <id>   扫码：dy / sph / ks / tt；官方：youtube / tiktok / instagram / facebook
+      --phone <id>      扫码为手机号或账号组；官方登录必须是 finance、korean 或 chinese
+      --client-secret <文件>  YouTube 的 Google 客户端 JSON
+      --api-key <key>   Zernio API key，TikTok 与 Instagram/Facebook 使用各自的 key
+      --profile <id>    Zernio 有多个 profile 时指定
       --partition <p>   完整 partition，如 persist:13800138000抖音
       --show              弹出登录窗口（视频号默认支持；抖音 CLI 不支持）
       --hide              不显示窗口（默认即为隐藏）

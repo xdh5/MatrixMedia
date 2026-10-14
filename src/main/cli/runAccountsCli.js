@@ -5,6 +5,7 @@ import fs from "fs";
 import { app, session } from "electron";
 import ptConfig from "../config/ptConfig";
 import { writeCliJson, writeCliStdout } from "./cliStdout";
+import { runOfficialPython } from "../services/officialPython";
 
 const LOGIN_COOKIE_RULE = {
   抖音: c => c.name === "passport_assist_user" && !!c.value,
@@ -82,6 +83,19 @@ function formatExpire(ms) {
 }
 
 export async function runAccountsCli(options) {
+  if (options.official) {
+    if (!options.phone) {
+      console.error("官方账号查询需要 --phone 指定账号组");
+      return 2;
+    }
+    const rows = runOfficialPython(["accounts", "--group", String(options.phone)]);
+    const list = Array.isArray(rows) ? rows : [];
+    const filtered = options.platform
+      ? list.filter((item) => String(item.platform) === String(options.platform).toLowerCase())
+      : list;
+    writeCliJson(filtered);
+    return 0;
+  }
   const accounts = readAccounts();
   const filtered = accounts.filter(a => {
     if (options.platform && a.pt !== options.platform) return false;
