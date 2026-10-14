@@ -16,7 +16,7 @@ function readPackageName(dir) {
 function walkUpForMatrixRoot(start) {
   let current = path.resolve(start);
   for (let i = 0; i < 8; i++) {
-    if (readPackageName(current) === "matrix-video") return current;
+    if (readPackageName(current) === "media-publisher") return current;
     const parent = path.dirname(current);
     if (parent === current) break;
     current = parent;
@@ -45,7 +45,7 @@ export function accountGroupFromArgv(argv = process.argv) {
   return "";
 }
 
-/** 定位 MatrixMedia 项目根目录。 */
+/** 定位 media-publisher 项目根目录。 */
 export function resolveMatrixRoot(app) {
   const candidates = [];
   if (app && app.isPackaged) {

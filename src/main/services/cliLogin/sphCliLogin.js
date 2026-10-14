@@ -41,7 +41,7 @@ function cliQrDebugLog(...args) {
   ) {
     return;
   }
-  console.error("[MatrixMedia][cli-qr][sph]", ...args);
+  console.error("[media-publisher][cli-qr][sph]", ...args);
 }
 
 function stripAnsi(s) {

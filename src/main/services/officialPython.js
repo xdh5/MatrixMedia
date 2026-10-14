@@ -20,7 +20,7 @@ export function officialPlatformFromArgv(argv) {
 }
 
 function pythonArgs(args) {
-  const command = process.env.MATRIXMEDIA_PYTHON || "python";
+  const command = process.env.MEDIA_PUBLISHER_PYTHON || "python";
   if (command === "py") return { command, args: ["-3", "-m", "platform_api.cli", ...args] };
   return { command, args: ["-m", "platform_api.cli", ...args] };
 }

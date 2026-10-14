@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to MatrixMedia are documented here.
+All notable changes to media-publisher are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
@@ -28,7 +28,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `cli accounts` — list all accounts and probe real-time cookie login status.
 - `cli history` — read `pushData` publish history; supports platform / phone / status / date filters.
 - `cli accounts --json` / `cli history --json` — machine-readable JSON stdout for AI agent pipelines.
-- `CLI_SKILLS.md` — pointer to `.cursor/skills/matrixmedia-cli-publish/SKILL.md`.
+- `CLI_SKILLS.md` — pointer to `.cursor/skills/media-publisher-cli/SKILL.md`.
 - `scripts/gen-release-notes.js` — helper for generating release notes.
 - `scripts/test-scheduled-publish.js` — smoke test for the scheduled-publish flow.
 - Exit code contract: `0` success / `1` unexpected error / `2` arg error / `3` business failure.

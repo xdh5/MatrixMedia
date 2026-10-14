@@ -5,7 +5,7 @@ const moment = require("moment"); // 引入日期处理库
 /**
  * 业务数据目录名（英文路径，避免卸载器/工具链编码问题；与 appId 一致便于识别）
  */
-const PERSISTENT_DATA_ROOT = "MatrixMedia";
+const PERSISTENT_DATA_ROOT = "media-publisher";
 const { restoreAccountGroupsIfNeeded } = require("../services/persistentDataRestore");
 
 function dirHasContent(dir) {
@@ -29,7 +29,7 @@ function migrateLegacyDataIfNeeded(legacyDir, dataDir) {
       fs.cpSync(from, to, { recursive: true });
     }
   } catch (e) {
-    console.error("MatrixMedia: 迁移历史数据到文档目录失败", e);
+    console.error("media-publisher: 迁移历史数据到文档目录失败", e);
   }
 }
 

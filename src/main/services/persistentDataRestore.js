@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const PERSISTENT_DATA_ROOT = "MatrixMedia";
+const PERSISTENT_DATA_ROOT = "media-publisher";
 
 function dirHasJsonRecords(dir) {
   try {
@@ -48,7 +48,7 @@ function legacyUserDataDir(app) {
   return path.join(app.getPath("userData"), "data");
 }
 
-/** 安装前把业务数据备份到「文档/MatrixMedia/backup/data」，重装后可恢复账号组。 */
+/** 安装前把业务数据备份到「文档/media-publisher/backup/data」，重装后可恢复账号组。 */
 function backupPersistentDataBeforeInstall(app) {
   if (!app || typeof app.getPath !== "function") return { backedUp: false };
   const source = documentsDataDir(app);
@@ -86,7 +86,7 @@ function restoreAccountGroupsIfNeeded(app, dataDir) {
       if (!name.endsWith(".json")) continue;
       fs.copyFileSync(path.join(source, name), path.join(accountDir, name));
     }
-    console.log(`MatrixMedia: 已从 ${source} 恢复账号组配置`);
+    console.log(`media-publisher: 已从 ${source} 恢复账号组配置`);
     return { restored: true, source };
   }
 

@@ -8,7 +8,7 @@ import { findChromeExecutablePath } from "./upLoad/findChrome.js";
 
 /**
  * 全局 Chrome 浏览器路径配置。
- * 配置文件保存在 userData 目录下（如 ~/Library/Application Support/MatrixMedia/chrome-config.json）。
+ * 配置文件保存在 userData 目录下（如 ~/Library/Application Support/media-publisher/chrome-config.json）。
  * 不依赖 electron-store 等第三方库。
  */
 

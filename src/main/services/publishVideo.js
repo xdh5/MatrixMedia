@@ -194,7 +194,7 @@ async function runSingleFilePublishInner(
         try {
           options.onDone(result);
         } catch (e) {
-          console.error("MatrixMedia: 发布完成回调失败:", e && e.message);
+          console.error("media-publisher: 发布完成回调失败:", e && e.message);
         }
       }
       if (waitForResult) resolve(result);

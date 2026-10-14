@@ -34,7 +34,7 @@ function cliQrDebugLog(...args) {
   ) {
     return;
   }
-  console.error("[MatrixMedia][cli-qr]", ...args);
+  console.error("[media-publisher][cli-qr]", ...args);
 }
 
 const puppeteer = addExtra(puppeteerCore);
@@ -239,7 +239,7 @@ export async function runDouyinPuppeteerHeadlessLogin({
   const ses = session.fromPartition(part);
   const partitionStoragePath = ses.getStoragePath();
   const temporaryProfile = force
-    ? fs.mkdtempSync(path.join(os.tmpdir(), "matrixmedia-douyin-login-"))
+    ? fs.mkdtempSync(path.join(os.tmpdir(), "media-publisher-douyin-login-"))
     : null;
   const clearTemporaryProfile = () => {
     if (!temporaryProfile) return;

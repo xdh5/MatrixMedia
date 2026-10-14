@@ -15,7 +15,7 @@ import {
 } from "./tools/login.js";
 
 const server = new Server(
-  { name: "matrixmedia", version: "0.2.0" },
+  { name: "media-publisher", version: "0.2.0" },
   { capabilities: { tools: {} } },
 );
 

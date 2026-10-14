@@ -1,6 +1,6 @@
 # MCP Server 说明
 
-仓库内置 `mcp/` 子包，实现了 [Model Context Protocol](https://modelcontextprotocol.io) Server，让支持 MCP 的 AI 工具**无需 shell 调用**即可直接操作 MatrixMedia。
+仓库内置 `mcp/` 子包，实现了 [Model Context Protocol](https://modelcontextprotocol.io) Server，让支持 MCP 的 AI 工具**无需 shell 调用**即可直接操作 media-publisher。
 
 MCP **不直接请求 HTTP**，而是通过 stdio transport 接收 tool 调用，内部 `spawn` CLI 子进程完成实际操作。
 
@@ -14,18 +14,18 @@ cd mcp && npm install && npm run build
 
 ## 配置 AI 工具
 
-将 `MATRIXMEDIA_DIR` 设为本仓库根目录的绝对路径。
+将 `MEDIA_PUBLISHER_DIR` 设为本仓库根目录的绝对路径。
 
 **Claude Desktop**（`~/Library/Application Support/Claude/claude_desktop_config.json`）：
 
 ```json
 {
   "mcpServers": {
-    "matrixmedia": {
+    "media-publisher": {
       "command": "node",
-      "args": ["<MATRIXMEDIA_DIR>/mcp/dist/index.js"],
+      "args": ["<MEDIA_PUBLISHER_DIR>/mcp/dist/index.js"],
       "env": {
-        "MATRIXMEDIA_DIR": "<MATRIXMEDIA_DIR>"
+        "MEDIA_PUBLISHER_DIR": "<MEDIA_PUBLISHER_DIR>"
       }
     }
   }
@@ -37,11 +37,11 @@ cd mcp && npm install && npm run build
 ```json
 {
   "mcpServers": {
-    "matrixmedia": {
+    "media-publisher": {
       "command": "node",
-      "args": ["<MATRIXMEDIA_DIR>/mcp/dist/index.js"],
+      "args": ["<MEDIA_PUBLISHER_DIR>/mcp/dist/index.js"],
       "env": {
-        "MATRIXMEDIA_DIR": "<MATRIXMEDIA_DIR>"
+        "MEDIA_PUBLISHER_DIR": "<MEDIA_PUBLISHER_DIR>"
       }
     }
   }

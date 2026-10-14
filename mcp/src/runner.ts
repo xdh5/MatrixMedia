@@ -51,10 +51,10 @@ function tryParseJson(raw: string): unknown | null {
   }
 }
 
-/** 矩媒仓库根目录。编译后位于 mcp/dist，向上三级即仓库根。 */
+/** media-publisher 仓库根目录。编译后位于 mcp/dist，向上三级即仓库根。 */
 export function matrixDir(): string {
   const defaultDir = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..");
-  return process.env.MATRIXMEDIA_DIR ?? defaultDir;
+  return process.env.MEDIA_PUBLISHER_DIR ?? defaultDir;
 }
 
 export function resolveCliSpawn(args: string[]): {
@@ -73,7 +73,7 @@ export function resolveCliSpawn(args: string[]): {
   let installed = false;
   if (!localRuntimeAvailable) {
     try {
-      execSync('which matrixmedia', { stdio: 'pipe' });
+      execSync('which media-publisher', { stdio: 'pipe' });
       installed = true;
     } catch {
       installed = false;
@@ -81,7 +81,7 @@ export function resolveCliSpawn(args: string[]): {
   }
 
   if (installed) {
-    return { command: 'matrixmedia', spawnArgs: ['cli', ...args], cwd: dir, env };
+    return { command: 'media-publisher', spawnArgs: ['cli', ...args], cwd: dir, env };
   }
   delete env.ELECTRON_RUN_AS_NODE;
   for (const key of Object.keys(env)) {
@@ -112,7 +112,7 @@ export function runMatrixPublish(
   args: string[],
   options?: { stdin?: string; timeoutMs?: number; onProgress?: (text: string) => void },
 ): Promise<CliResult> {
-  const command = process.env.MATRIXMEDIA_PYTHON || "python";
+  const command = process.env.MEDIA_PUBLISHER_PYTHON || "python";
   const spawnArgs = command === "py"
     ? ["-3", "-m", "publishing", ...args]
     : ["-m", "publishing", ...args];

@@ -18,7 +18,7 @@ const LOGIN_COOKIE_RULE = {
 
 function getAccountsDir() {
   const documents = app.getPath("documents");
-  return path.join(documents, "MatrixMedia", "data", "account");
+  return path.join(documents, "media-publisher", "data", "account");
 }
 
 function readAccounts() {

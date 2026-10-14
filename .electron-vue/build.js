@@ -83,7 +83,7 @@ function pack(config) {
 }
 
 function web() {
-  console.error("MatrixMedia 已移除图形界面，不再构建网页前端。")
+  console.error("media-publisher 已移除图形界面，不再构建网页前端。")
   process.exit(1)
 }
 

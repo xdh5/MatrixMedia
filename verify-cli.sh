@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify-cli.sh — MatrixMedia CLI contract verification
+# verify-cli.sh — media-publisher CLI contract verification
 # Tests exit codes (0/1/2/3) and --json output purity.
 #
 # Usage: bash verify-cli.sh [--verbose]
@@ -130,7 +130,7 @@ assert_no_non_json() {
 # ── pre-check ────────────────────────────────────────────────────────────────
 
 echo ""
-echo "=== MatrixMedia CLI Verification ==="
+echo "=== media-publisher CLI Verification ==="
 echo "repo:     $REPO_ROOT"
 echo "electron: $ELECTRON"
 echo "dist:     $REPO_ROOT/dist/electron/main.js"

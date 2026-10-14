@@ -1,21 +1,21 @@
 # Examples
 
-> Examples below assume `matrixmedia` is on PATH. On Windows the NSIS installer
+> Examples below assume `media-publisher` is on PATH. On Windows the NSIS installer
 > handles this automatically. On macOS, the user runs once:
 >
 > ```bash
-> sudo ln -sf /Applications/matrixmedia.app/Contents/MacOS/matrixmedia /usr/local/bin/matrixmedia
+> sudo ln -sf /Applications/media-publisher.app/Contents/MacOS/media-publisher /usr/local/bin/media-publisher
 > ```
 >
-> Without the symlink, replace every `matrixmedia` below with
-> `/Applications/matrixmedia.app/Contents/MacOS/matrixmedia`.
+> Without the symlink, replace every `media-publisher` below with
+> `/Applications/media-publisher.app/Contents/MacOS/media-publisher`.
 
 ## Example 1: Minimal publish
 
 User intent: 发布抖音视频，已登录。
 
 ```bash
-matrixmedia cli publish \
+media-publisher cli publish \
   -p dy \
   --phone 13800138000 \
   -f "/Users/me/videos/demo.mp4" \
@@ -27,9 +27,9 @@ matrixmedia cli publish \
 User intent: 首次登录后发布抖音。
 
 ```bash
-matrixmedia cli login -p dy --phone 13800138000
+media-publisher cli login -p dy --phone 13800138000
 
-matrixmedia cli publish \
+media-publisher cli publish \
   -p dy \
   --phone 13800138000 \
   -f "/Users/me/videos/demo.mp4" \
@@ -44,12 +44,12 @@ User intent: 首次登录后发布视频号。
 
 ```bash
 # 终端二维码登录（无弹窗，透明窗口）
-matrixmedia cli login -p sph --phone 13800138000
+media-publisher cli login -p sph --phone 13800138000
 
 # 或弹出可见窗口登录
-matrixmedia cli login -p sph --phone 13800138000 --show
+media-publisher cli login -p sph --phone 13800138000 --show
 
-matrixmedia cli publish \
+media-publisher cli publish \
   -p sph \
   --phone 13800138000 \
   -f "/Users/me/videos/demo.mp4" \
@@ -61,7 +61,7 @@ matrixmedia cli publish \
 ## Example 3: Show window for debugging
 
 ```bash
-matrixmedia cli publish \
+media-publisher cli publish \
   -p dy \
   --phone 13800138000 \
   -f "/Users/me/videos/demo.mp4" \
@@ -75,7 +75,7 @@ matrixmedia cli publish \
 User intent: 每天早上快速看一遍哪些账号掉登录了。
 
 ```bash
-matrixmedia cli accounts --logged-out
+media-publisher cli accounts --logged-out
 ```
 
 Output (table mode):
@@ -92,7 +92,7 @@ Output (table mode):
 User intent: 给上层调度系统喂当前登录态快照。
 
 ```bash
-matrixmedia cli accounts --json > /tmp/mm-accounts.json
+media-publisher cli accounts --json > /tmp/mm-accounts.json
 ```
 
 Each row: `{ phone, pt, partition, loggedIn, reason, expireAt, createdAt }`.
@@ -102,7 +102,7 @@ Each row: `{ phone, pt, partition, loggedIn, reason, expireAt, createdAt }`.
 User intent: 发布视频号视频，长标题 + 单独短标 + 3 个标签。
 
 ```bash
-matrixmedia cli publish \
+media-publisher cli publish \
   -p sph \
   --phone 13800138000 \
   -f "/Users/me/videos/run5km.mp4" \
@@ -123,7 +123,7 @@ Why it matters:
 抖音把 `bq` 拼在 `bt2` 之后作为描述。想做 hashtag 显式加 `#`：
 
 ```bash
-matrixmedia cli publish \
+media-publisher cli publish \
   -p dy \
   --phone 13800138000 \
   -f "/Users/me/videos/demo.mp4" \
@@ -137,7 +137,7 @@ matrixmedia cli publish \
 bilibili 的标签是独立输入 + 回车的控件，前导 `#` 会被剥掉，直接写词：
 
 ```bash
-matrixmedia cli publish \
+media-publisher cli publish \
   -p blbl \
   --phone 13800138000 \
   -f "/Users/me/videos/demo.mp4" \
@@ -150,7 +150,7 @@ matrixmedia cli publish \
 当前 `upLoad/bjh.js` 没有写入 tag 逻辑；不要在这里浪费时间编标签，写好标题 + 地址即可：
 
 ```bash
-matrixmedia cli publish \
+media-publisher cli publish \
   -p bjh \
   --phone 13800138000 \
   -f "/Users/me/videos/demo.mp4" \
@@ -164,13 +164,13 @@ User intent: 发布前顺手核一次登录态。
 
 ```bash
 # 1) 检查账号在线
-matrixmedia cli accounts -p dy --phone 13800138000
+media-publisher cli accounts -p dy --phone 13800138000
 
 # 2) 若返回「未登录」，先扫码登录
-matrixmedia cli login -p dy --phone 13800138000
+media-publisher cli login -p dy --phone 13800138000
 
 # 3) 发布
-matrixmedia cli publish \
+media-publisher cli publish \
   -p dy \
   --phone 13800138000 \
   -f "/Users/me/videos/demo.mp4" \
@@ -183,13 +183,13 @@ User intent: 视频号发布前检查并登录。
 
 ```bash
 # 1) 检查账号在线
-matrixmedia cli accounts -p sph --phone 13800138000
+media-publisher cli accounts -p sph --phone 13800138000
 
 # 2) 若返回「未登录」，CLI 扫码登录（终端 QR）
-matrixmedia cli login -p sph --phone 13800138000
+media-publisher cli login -p sph --phone 13800138000
 
 # 3) 发布
-matrixmedia cli publish \
+media-publisher cli publish \
   -p sph \
   --phone 13800138000 \
   -f "/Users/me/videos/demo.mp4" \

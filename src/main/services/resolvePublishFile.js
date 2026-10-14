@@ -22,11 +22,11 @@ export function guessFileNameFromUrl(url) {
   } catch (_) {
     /* ignore */
   }
-  return `matrixmedia-${Date.now()}.mp4`;
+  return `media-publisher-${Date.now()}.mp4`;
 }
 
 function getPublishTempDir() {
-  return path.join(app.getPath("temp"), "matrixmedia-publish");
+  return path.join(app.getPath("temp"), "media-publisher-publish");
 }
 
 function safeUnlink(filePath) {
@@ -36,7 +36,7 @@ function safeUnlink(filePath) {
     }
   } catch (e) {
     console.warn(
-      "MatrixMedia: 清理临时视频失败:",
+      "media-publisher: 清理临时视频失败:",
       filePath,
       e && e.message ? e.message : e
     );

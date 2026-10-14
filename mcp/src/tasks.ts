@@ -22,7 +22,7 @@ const livePaths = new Set<string>();
 const liveKeys = new Map<string, string>();
 
 function tasksDir(): string {
-  const dir = path.join(os.tmpdir(), "matrixmedia-mcp", "tasks");
+  const dir = path.join(os.tmpdir(), "media-publisher-mcp", "tasks");
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

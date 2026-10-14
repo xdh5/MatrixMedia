@@ -75,7 +75,7 @@ function makeLoginId(platform: string, accountGroup: string): string {
 
 function qrPathFor(loginId: string): string {
   const safe = loginId.replace(/[^A-Za-z0-9._-]+/g, "_");
-  return path.join(os.tmpdir(), `matrixmedia-login-${safe}.png`);
+  return path.join(os.tmpdir(), `media-publisher-login-${safe}.png`);
 }
 
 function sleep(ms: number): Promise<void> {

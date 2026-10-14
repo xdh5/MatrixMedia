@@ -31,7 +31,7 @@ function cliQrDebugEnabled() {
 
 function cliQrDebugLog(...args) {
   if (cliQrDebugEnabled()) {
-    console.error("[MatrixMedia][cli-qr]", ...args);
+    console.error("[media-publisher][cli-qr]", ...args);
   }
 }
 

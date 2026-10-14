@@ -139,7 +139,7 @@ export function parseLoginArgs(subArgv) {
   }
 
   if (out.show && out.platform !== '视频号' && out.platform !== '抖音') {
-    console.warn('MatrixMedia: CLI 模式不打开登录窗口，已忽略 --show。')
+    console.warn('media-publisher: CLI 模式不打开登录窗口，已忽略 --show。')
     out.show = false
   }
 
@@ -203,7 +203,7 @@ YouTube 走 Google 官方授权，TikTok、Instagram、Facebook 走 Zernio。凭
       --timeout-sec <n>   最长等待秒数，默认 900（15 分钟）
   -h, --help            显示本帮助
 
-调试: MATRIX_CLI_QR_DEBUG=1 向 stderr 输出 [MatrixMedia][cli-qr] 日志（约每 6s 一次页面诊断）。
+调试: MATRIX_CLI_QR_DEBUG=1 向 stderr 输出 [media-publisher][cli-qr] 日志（约每 6s 一次页面诊断）。
       MATRIX_CLI_QR_TERM_COLS=<24-260> 强制缩小终端二维码图（默认按图宽约每 1.85px 一列，上限终端宽）。
       MATRIX_CLI_QR_TERM_BLOCKS=full 栅格模式仅用 █（默认 ▀▄█；解码成功时优先 qrcode-terminal）。
       MATRIX_CLI_QR_NO_DECODE=1 强制栅格回退（不调 jsQR）。

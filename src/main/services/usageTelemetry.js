@@ -6,8 +6,8 @@
  * 设计：
  * - 每次 Electron 启动（GUI / CLI）追加一条事件到公开 Gist 的 events.json
  * - 不做去重、不固定设备 ID，只记录"打开"这一动作
- * - 写入需要 token：env MATRIXMEDIA_GIST_TOKEN 或 ~/.matrixmedia/gist-token
- * - 关闭：env MATRIXMEDIA_DISABLE_TELEMETRY=1 或 ~/.matrixmedia/no-telemetry
+ * - 写入需要 token：env MEDIA_PUBLISHER_GIST_TOKEN 或 ~/.media-publisher/gist-token
+ * - 关闭：env MEDIA_PUBLISHER_DISABLE_TELEMETRY=1 或 ~/.media-publisher/no-telemetry
  * - best-effort，失败静默，不影响应用启动
  */
 
@@ -21,7 +21,7 @@ const GIST_FILENAME = "events.json";
 const MAX_EVENTS = 5000; // 最多保留最近 5000 条，避免无限增长
 const NO_TELEMETRY_FILE = "no-telemetry";
 const TOKEN_FILE = "gist-token";
-const CONFIG_DIR = ".matrixmedia";
+const CONFIG_DIR = ".media-publisher";
 
 function readEnv(name) {
   const v = process.env[name];
@@ -41,18 +41,18 @@ function readConfigFile(name) {
 }
 
 export function getGistId() {
-  return readEnv("MATRIXMEDIA_GIST_ID");
+  return readEnv("MEDIA_PUBLISHER_GIST_ID");
 }
 
 export function getGistToken() {
   return (
-    readEnv("MATRIXMEDIA_GIST_TOKEN") ||
+    readEnv("MEDIA_PUBLISHER_GIST_TOKEN") ||
     readConfigFile(TOKEN_FILE)
   );
 }
 
 export function isTelemetryDisabled() {
-  if (readEnv("MATRIXMEDIA_DISABLE_TELEMETRY")) return true;
+  if (readEnv("MEDIA_PUBLISHER_DISABLE_TELEMETRY")) return true;
   try {
     if (fs.existsSync(path.join(configDirPath(), NO_TELEMETRY_FILE)))
       return true;
@@ -107,7 +107,7 @@ function httpsRequest(options, body) {
 function githubHeaders(token, extra = {}) {
   return Object.assign(
     {
-      "User-Agent": "MatrixMedia-Telemetry",
+      "User-Agent": "media-publisher-telemetry",
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
     },

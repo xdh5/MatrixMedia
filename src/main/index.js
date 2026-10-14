@@ -9,12 +9,12 @@ if (typeof electron !== "object" || !electron.app) {
   const runAsNode = process.env.ELECTRON_RUN_AS_NODE;
   if (runAsNode && String(runAsNode).trim() !== "") {
     console.error(
-      "MatrixMedia: 检测到环境变量 ELECTRON_RUN_AS_NODE 已开启，主进程会得到 npm 的 electron 路径字符串而非 API。",
+      "media-publisher: 检测到环境变量 ELECTRON_RUN_AS_NODE 已开启，主进程会得到 npm 的 electron 路径字符串而非 API。",
       "请先取消该变量后再启动，例如：ELECTRON_RUN_AS_NODE= electron . cli publish --help"
     );
   } else {
     console.error(
-      "MatrixMedia: require('electron') 异常，请使用「electron .」从项目根启动（勿直接 electron path/to/main.js）。",
+      "media-publisher: require('electron') 异常，请使用「electron .」从项目根启动（勿直接 electron path/to/main.js）。",
       typeof electron
     );
   }
@@ -31,13 +31,13 @@ import { configureMatrixSessionData } from "./services/matrixDataPaths";
 
 const cliMode = isCliMode(process.argv);
 
-// 与历史安装保持同一 userData 名称，日志仍在原目录；Cookie 另行改到项目 data。
-if (app.name !== "matrix-video") {
-  app.name = "matrix-video";
+// 用户数据目录名为 media-publisher。登录 Cookie 放在仓库 data。
+if (app.name !== "media-publisher") {
+  app.name = "media-publisher";
 }
 
 if (process.platform === "win32") {
-  app.setAppUserModelId("com.matrix.video");
+  app.setAppUserModelId("com.media.publisher");
 }
 
 // 视频号要先在本地解码才能开始上传。命令行若带 --disable-gpu，
@@ -66,7 +66,7 @@ async function startApplication() {
 }
 
 if (!cliMode) {
-  console.error("MatrixMedia 已移除图形界面，请使用 cli 子命令。");
+  console.error("media-publisher 已移除图形界面，请使用 cli 子命令。");
   process.exit(1);
 } else {
   configureMatrixSessionData(app);

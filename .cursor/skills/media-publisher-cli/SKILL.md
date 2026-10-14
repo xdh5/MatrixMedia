@@ -1,9 +1,9 @@
 ---
-name: matrixmedia-cli-publish
-description: Run MatrixMedia in CLI mode for login, video publishing, account status inspection, and publish history review. Covers argument building, preflight checks, and failure handling. Use when the user asks to publish via CLI, check 登录状态 / 发布记录, mentions OpenClaw/external command orchestration, or asks AI to execute cli login/publish/accounts/history in this repository.
+name: media-publisher-cli
+description: Run media-publisher in CLI mode for login, video publishing, account status inspection, and publish history review. Covers argument building, preflight checks, and failure handling. Use when the user asks to publish via CLI, check 登录状态 / 发布记录, mentions OpenClaw/external command orchestration, or asks AI to execute cli login/publish/accounts/history in this repository.
 ---
 
-# MatrixMedia CLI
+# media-publisher CLI
 
 ## Subcommands
 
@@ -52,22 +52,22 @@ Installed app (recommended) examples:
 
 ```bash
 # show login help
-matrixmedia cli login --help
+media-publisher cli login --help
 
 # login (Douyin — terminal QR, no window)
-matrixmedia cli login -p dy --phone 13800138000
+media-publisher cli login -p dy --phone 13800138000
 
 # login (视频号 — terminal QR, transparent window)
-matrixmedia cli login -p sph --phone 13800138000
+media-publisher cli login -p sph --phone 13800138000
 
 # login (视频号 — visible window for debugging)
-matrixmedia cli login -p sph --phone 13800138000 --show
+media-publisher cli login -p sph --phone 13800138000 --show
 
 # show publish help
-matrixmedia cli publish --help
+media-publisher cli publish --help
 
 # publish
-matrixmedia cli publish \
+media-publisher cli publish \
   -p dy \
   --phone 13800138000 \
   -f "/absolute/path/to/video.mp4" \
@@ -76,16 +76,16 @@ matrixmedia cli publish \
   --tags "标签1,标签2"
 
 # list all accounts with login status
-matrixmedia cli accounts
+media-publisher cli accounts
 
 # list only logged-out Douyin accounts in JSON form
-matrixmedia cli accounts -p dy --logged-out --json
+media-publisher cli accounts -p dy --logged-out --json
 
 # last 7 days of publish records
-matrixmedia cli history
+media-publisher cli history
 
 # failed publishes on Douyin in the last 30 days
-matrixmedia cli history -p dy -d 30 -s failed
+media-publisher cli history -p dy -d 30 -s failed
 ```
 
 Development mode (repo local) examples:
@@ -97,7 +97,7 @@ ELECTRON_RUN_AS_NODE= electron . cli publish --help
 
 Windows installer behavior:
 - NSIS installer writes install directory to user `PATH`.
-- Executable command is unified as `matrixmedia`.
+- Executable command is unified as `media-publisher`.
 - Users should not need to choose between Chinese/English executable names.
 
 macOS installer behavior:
@@ -105,17 +105,17 @@ macOS installer behavior:
 - Recommend users run a one-time symlink after drag-installing:
 
   ```bash
-  sudo ln -sf /Applications/matrixmedia.app/Contents/MacOS/matrixmedia /usr/local/bin/matrixmedia
+  sudo ln -sf /Applications/media-publisher.app/Contents/MacOS/media-publisher /usr/local/bin/media-publisher
   ```
 
-  After that, plain `matrixmedia cli ...` works in any terminal. The link survives app upgrades as long as the `.app` stays at `/Applications/matrixmedia.app`.
+  After that, plain `media-publisher cli ...` works in any terminal. The link survives app upgrades as long as the `.app` stays at `/Applications/media-publisher.app`.
 - If the user refuses `sudo`, fall back to an alias in their shell rc:
 
   ```bash
-  alias mm='/Applications/matrixmedia.app/Contents/MacOS/matrixmedia'
+  alias mm='/Applications/media-publisher.app/Contents/MacOS/media-publisher'
   ```
 
-- When scripting on Mac without the symlink, always spell the full binary path — `/Applications/matrixmedia.app/Contents/MacOS/matrixmedia cli ...`.
+- When scripting on Mac without the symlink, always spell the full binary path — `/Applications/media-publisher.app/Contents/MacOS/media-publisher cli ...`.
 
 ## Argument Mapping
 
@@ -137,7 +137,7 @@ Map user intent to CLI args:
 Use `--publish-at "YYYY-MM-DD HH:mm:ss"` for one-time scheduled publishing. The command must include the real video file and text fields; do not create empty placeholder tasks.
 
 ```bash
-matrixmedia cli publish \
+media-publisher cli publish \
   -p dy \
   --phone 13800138000 \
   -f "/absolute/path/to/video.mp4" \
@@ -151,7 +151,7 @@ Rules:
 
 1. Only explicit year-month-day hour-minute-second is supported. Do not generate daily, weekly, monthly, or cron-style schedules.
 2. The scheduled task is written to publish history immediately with status `scheduled`.
-3. If MatrixMedia is closed and misses the time, the next startup marks the task as `expired`; do not auto-republish expired tasks.
+3. If media-publisher is closed and misses the time, the next startup marks the task as `expired`; do not auto-republish expired tasks.
 4. Failed or expired scheduled tasks can be republished from GUI history because the record stores the real file path, platform, account, title, short title, tags, and address.
 5. If `--publish-at` is in the past or uses an invalid format, treat it as an argument error and ask the user for a future time.
 
@@ -229,7 +229,7 @@ Good vs bad（哔哩哔哩 / 小红书）：
 Inspect login state for every saved account:
 
 ```bash
-matrixmedia cli accounts [options]
+media-publisher cli accounts [options]
 ```
 
 Key flags:

@@ -188,7 +188,7 @@ export function parsePublishArgs(subArgv) {
   const visibleDebugPlatforms = new Set(["视频号", "抖音"]);
   if (out.show && !visibleDebugPlatforms.has(out.platform)) {
     console.warn(
-      "MatrixMedia: 当前仅视频号和抖音 CLI publish 支持显示浏览器窗口，已忽略 --show。"
+      "media-publisher: 当前仅视频号和抖音 CLI publish 支持显示浏览器窗口，已忽略 --show。"
     );
     out.show = false;
   }
@@ -203,12 +203,12 @@ export function parsePublishArgs(subArgv) {
       const cleaned = bt2Trim.replace(/[，。、\/,;:!?'"()\[\]{}<>]/g, "");
       if (cleaned.length > 16) {
         console.warn(
-          `MatrixMedia: 视频号短标 --bt2 共 ${cleaned.length} 字（不含标点），建议控制在 6-16 字内，过长可能被平台截断或报错。`
+          `media-publisher: 视频号短标 --bt2 共 ${cleaned.length} 字（不含标点），建议控制在 6-16 字内，过长可能被平台截断或报错。`
         );
       }
       if (cleaned.length < 6) {
         console.warn(
-          `MatrixMedia: 视频号短标 --bt2 仅 ${cleaned.length} 字（不含标点），平台提示 6-16 字，过短可能被拒。`
+          `media-publisher: 视频号短标 --bt2 仅 ${cleaned.length} 字（不含标点），平台提示 6-16 字，过短可能被拒。`
         );
       }
     }
@@ -216,7 +216,7 @@ export function parsePublishArgs(subArgv) {
 
   if (out.bq && /[,，、;；|]/.test(out.bq)) {
     console.warn(
-      "MatrixMedia: --tags 推荐用空格分隔多个标签（如 '减脂 健身 教程'）；检测到 ,，、;；| 等分隔符，哔哩哔哩 / 小红书会按空格切分，逗号将作为单个标签字符保留。"
+      "media-publisher: --tags 推荐用空格分隔多个标签（如 '减脂 健身 教程'）；检测到 ,，、;；| 等分隔符，哔哩哔哩 / 小红书会按空格切分，逗号将作为单个标签字符保留。"
     );
   }
 
@@ -224,7 +224,7 @@ export function parsePublishArgs(subArgv) {
     const tags = String(out.bq).trim().split(/\s+/).filter(Boolean);
     if (tags.length > 4) {
       console.warn(
-        `MatrixMedia: --tags 共 ${tags.length} 个，建议最多 4 个话题；多余标签会降低每个话题的权重，生成层请按相关性裁到 4 个以内。`
+        `media-publisher: --tags 共 ${tags.length} 个，建议最多 4 个话题；多余标签会降低每个话题的权重，生成层请按相关性裁到 4 个以内。`
       );
     }
     const hashtagPlatforms = new Set(["视频号", "抖音", "快手"]);
@@ -288,16 +288,16 @@ export function publishHelpText() {
   矩媒.exe cli publish -p dy --phone 13800138000 -f C:\\\\v.mp4 -t "我的视频标题" --tags "#减脂 #健身"
   electron . cli publish -p dy --phone 13800138000 -f ./a.mp4 --name "任务A" -t "标题" --tags "#标签1 #标签2"
   # 视频号可选带 --bt2 短标，并使用空格分隔的 tags：
-  matrixmedia cli publish -p sph --phone 13800138000 -f ./v.mp4 \\\\
+  media-publisher cli publish -p sph --phone 13800138000 -f ./v.mp4 \\\\
     -t "新手第一天跑步就坚持 5 公里是什么体验" \\\\
     --bt2 "5公里新手挑战" \\\\
     --tags "跑步 新手 减脂" \\
     --sph-product-id 10000591263144 --draft
   # 哔哩哔哩独立标签控件，空格分隔、是否带 # 都可：
-  matrixmedia cli publish -p blbl --phone 13800138000 -f ./v.mp4 -t "标题" --tags "游戏 解说 开黑"
+  media-publisher cli publish -p blbl --phone 13800138000 -f ./v.mp4 -t "标题" --tags "游戏 解说 开黑"
   # 一次性定时发布：必须提供实际视频、标题、账号等完整发布参数
-  matrixmedia cli publish -p dy --phone 13800138000 -f ./v.mp4 -t "标题" --publish-at "2026-05-05 20:30:00"
+  media-publisher cli publish -p dy --phone 13800138000 -f ./v.mp4 -t "标题" --publish-at "2026-05-05 20:30:00"
   # batch publish with xlsx config:
-  matrixmedia cli publish -p dy --phone 13800138000 --dir ./videos --config ./videos/batch.xlsx
+  media-publisher cli publish -p dy --phone 13800138000 --dir ./videos --config ./videos/batch.xlsx
 `.trim();
 }

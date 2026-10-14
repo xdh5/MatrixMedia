@@ -2,11 +2,11 @@
 
 本仓库已提供可供 AI 自动调用的 CLI Skill：
 
-- `.cursor/skills/matrixmedia-cli-publish/SKILL.md`
+- `.cursor/skills/media-publisher-cli/SKILL.md`
 
 配套示例：
 
-- `.cursor/skills/matrixmedia-cli-publish/examples.md`
+- `.cursor/skills/media-publisher-cli/examples.md`
 
 该 Skill 覆盖以下子命令：
 
@@ -19,7 +19,7 @@
 
 > 抖音和视频号支持 CLI 登录。其他平台**无 CLI 登录通道**：请先在 GUI 登录一次，CLI 会复用同一 `persist:<phone><平台>` session partition 继续发布与查询。
 
-数据目录均为 `<Documents>/MatrixMedia/data/`（与 GUI 共用）。
+数据目录均为 `<Documents>/media-publisher/data/`（与 GUI 共用）。
 
 ## AI 发布方法
 
@@ -33,7 +33,7 @@ AI 调用 `cli publish` 时必须传入真实发布数据，不能只创建空�
 一次性定时发布使用 `--publish-at "YYYY-MM-DD HH:mm:ss"`，例如：
 
 ```bash
-matrixmedia cli publish \
+media-publisher cli publish \
   -p dy \
   --phone 13800138000 \
   -f "/absolute/path/to/video.mp4" \
@@ -45,15 +45,15 @@ matrixmedia cli publish \
 
 定时发布只支持明确年月日时分秒，不支持每日、每周、每月循环。抖音、快手、视频号、百家号和头条会立即上传并设置创作者平台官方定时发布，只有平台确认预约成功才返回成功；其他平台直接报错。矩媒不提供应用内定时队列。
 
-## 快速安装（让 `matrixmedia` 进入 PATH）
+## 快速安装（让 `media-publisher` 进入 PATH）
 
-- **Windows**：NSIS 安装包会自动把安装目录写入当前用户 PATH，安装完成重开终端即可直接用 `matrixmedia cli ...`。
+- **Windows**：NSIS 安装包会自动把安装目录写入当前用户 PATH，安装完成重开终端即可直接用 `media-publisher cli ...`。
 - **macOS**：`.dmg` 无法写 PATH，拖装到 `/Applications` 后执行一次：
 
   ```bash
-  sudo ln -sf /Applications/matrixmedia.app/Contents/MacOS/matrixmedia /usr/local/bin/matrixmedia
+  sudo ln -sf /Applications/media-publisher.app/Contents/MacOS/media-publisher /usr/local/bin/media-publisher
   ```
 
-  卸载链接：`sudo rm /usr/local/bin/matrixmedia`。
+  卸载链接：`sudo rm /usr/local/bin/media-publisher`。
 
 如果你的 AI 平台支持读取仓库内 Skill 目录，可直接加载上述文件并按其中流程执行 `cli login` / `cli publish` / `cli accounts` / `cli history`。

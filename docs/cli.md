@@ -21,7 +21,7 @@ ELECTRON_RUN_AS_NODE= electron . cli publish --help
 ### 通用机制
 
 1. **会话**：`partition` 形如 `persist:<手机号段><平台名>`，与账号树、webview 一致。
-2. **Cookie 持久化**：登录成功后自动 `cookies.flushStore()` + `flushStorageData()`，Cookie 写在 MatrixMedia 目录的 `data` 下。
+2. **Cookie 持久化**：登录成功后自动 `cookies.flushStore()` + `flushStorageData()`，Cookie 写在 media-publisher 目录的 `data` 下。
 3. **终端扫码**：CLI 自动捕获二维码并在终端展示，用户扫码后继续轮询登录 Cookie。
 4. **退出**：检测到 Cookie 后关窗；超时 / 用户关窗返回码 3。
 
@@ -118,7 +118,7 @@ electron . cli publish -p sph --phone 13800138000 -f /path/to/video.mp4 \
 
 ### 注意事项
 
-1. **登录态**：Cookie 保存在 MatrixMedia 目录的 `data` 中。抖音、快手、头条和视频号使用 `cli login` 扫码登录。
+1. **登录态**：Cookie 保存在 media-publisher 目录的 `data` 中。抖音、快手、头条和视频号使用 `cli login` 扫码登录。
 2. **进程生命周期**：命令会启动 Electron 主进程，不打开图形界面。命令完成、参数失败或业务失败后会主动退出；执行发布期间进程存在属于正常现象。
 3. **启动诊断**：终端会依次输出 Puppeteer 初始化、Electron ready、CLI 参数识别和最终退出码。初始化超过 15 秒会以退出码 `1` 结束并打印明确错误，不会无限静默等待。
 4. **登录失效**：视频号发布页若跳转到 `channels.weixin.qq.com/login.html`，CLI 会立即提示重新登录并以退出码 `3` 结束，不再按普通 URL 不匹配重复重试。

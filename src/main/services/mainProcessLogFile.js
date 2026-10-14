@@ -56,7 +56,7 @@ export function installMainProcessLogFile(app) {
   if (installed) return;
   installed = true;
   openLogStream(app).write(
-    `[${new Date().toISOString()}] [LOG] MatrixMedia 主进程日志文件已就绪。\n`
+    `[${new Date().toISOString()}] [LOG] media-publisher 主进程日志文件已就绪。\n`
   );
 
   const stamp = () => new Date().toISOString();
@@ -109,6 +109,6 @@ export function clearMainProcessLogFile(app) {
     return;
   }
   openLogStream(app).write(
-    `[${new Date().toISOString()}] [LOG] MatrixMedia 主进程日志已清空。\n`
+    `[${new Date().toISOString()}] [LOG] media-publisher 主进程日志已清空。\n`
   );
 }
