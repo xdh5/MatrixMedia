@@ -5,17 +5,11 @@ process.env.BABEL_ENV = 'main'
 const path = require('path')
 const { dependencies } = require('../package.json')
 const webpack = require('webpack')
-const TerserPlugin = require('terser-webpack-plugin')
-const config = require('../config')
 
 const userConfig = {
   NODE_ENV: "development",
   URL_SIGNATURE: "true",
   TERGET_ENV: "development",
-}
-
-function resolve(dir) {
-  return path.join(__dirname, '..', dir)
 }
 
 let mainConfig = {
@@ -57,9 +51,6 @@ let mainConfig = {
     })
   ],
   resolve: {
-    alias: {
-      '@config': resolve('config'),
-    },
     extensions: ['.js', '.json', '.node']
   },
   target: 'electron-main',
@@ -71,33 +62,7 @@ let mainConfig = {
 if (process.env.NODE_ENV !== 'production') {
   mainConfig.plugins.push(
     new webpack.DefinePlugin({
-      'process.env.libPath': `"${path.join(__dirname, `../${config.DllFolder}`).replace(/\\/g, '\\\\')}"`
-    })
-  )
-}
-
-/**
- * Adjust mainConfig for production settings
- */
-if (process.env.NODE_ENV === 'production' && config.build.cleanConsole) {
-  mainConfig.optimization = {
-    minimize: true,
-    minimizer: [
-      new TerserPlugin({
-        terserOptions: {
-          compress: {
-            drop_console: true,
-            drop_debugger: true,
-            pure_funcs: ["console.log", "console.warn"]
-          }
-        }
-
-      })
-    ]
-  }
-  mainConfig.plugins.push(
-    new webpack.DefinePlugin({
-      'process.env.NODE_ENV': '"production"'
+      'process.env.libPath': `"${path.join(__dirname, '..').replace(/\\/g, '\\\\')}"`
     })
   )
 }

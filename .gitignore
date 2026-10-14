@@ -15,7 +15,6 @@ win-unpacked
 /update
 outputFile
 /data
-/config/data
 pubmFile
 .mm-*.txt
 /text/file

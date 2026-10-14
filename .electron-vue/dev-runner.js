@@ -7,7 +7,6 @@ const electron = require('electron')
 const path = require('path')
 const { say } = require('cfonts')
 const { spawn } = require('child_process')
-const config = require('../config')
 const webpack = require('webpack')
 
 const mainConfig = require('./webpack.main.config')
@@ -18,7 +17,7 @@ let manualRestart = false
 function logStats(proc, data) {
   let log = ''
 
-  log += chalk.yellow.bold(`┏ ${proc} ${config.dev.chineseLog ? '编译过程' : 'Process'} ${new Array((19 - proc.length) + 1).join('-')}`)
+  log += chalk.yellow.bold(`┏ ${proc} 编译过程 ${new Array((19 - proc.length) + 1).join('-')}`)
   log += '\n\n'
 
   if (typeof data === 'object') {
@@ -37,24 +36,15 @@ function logStats(proc, data) {
 }
 
 function removeJunk(chunk) {
-  if (config.dev.removeElectronJunk) {
-    // Example: 2018-08-10 22:48:42.866 Electron[90311:4883863] *** WARNING: Textured window <AtomNSWindow: 0x7fb75f68a770>
-    if (/\d+-\d+-\d+ \d+:\d+:\d+\.\d+ Electron(?: Helper)?\[\d+:\d+] /.test(chunk)) {
-      return false;
-    }
-
-    // Example: [90789:0810/225804.894349:ERROR:CONSOLE(105)] "Uncaught (in promise) Error: Could not instantiate: ProductRegistryImpl.Registry", source: chrome-devtools://devtools/bundled/inspector.js (105)
-    if (/\[\d+:\d+\/|\d+\.\d+:ERROR:CONSOLE\(\d+\)\]/.test(chunk)) {
-      return false;
-    }
-
-    // Example: ALSA lib confmisc.c:767:(parse_card) cannot find card '0'
-    if (/ALSA lib [a-z]+\.c:\d+:\([a-z_]+\)/.test(chunk)) {
-      return false;
-    }
+  if (/\d+-\d+-\d+ \d+:\d+:\d+\.\d+ Electron(?: Helper)?\[\d+:\d+] /.test(chunk)) {
+    return false;
   }
-
-
+  if (/\[\d+:\d+\/|\d+\.\d+:ERROR:CONSOLE\(\d+\)\]/.test(chunk)) {
+    return false;
+  }
+  if (/ALSA lib [a-z]+\.c:\d+:\([a-z_]+\)/.test(chunk)) {
+    return false;
+  }
   return chunk;
 }
 
@@ -64,7 +54,7 @@ function startMain() {
     const compiler = webpack(mainConfig)
 
     compiler.hooks.watchRun.tapAsync('watch-run', (compilation, done) => {
-      logStats(`${config.dev.chineseLog ? '主进程' : 'Main'}`, chalk.white.bold(`${config.dev.chineseLog ? '正在处理资源文件...' : 'compiling...'}`))
+      logStats('主进程', chalk.white.bold('正在处理资源文件...'))
       done()
     })
 
@@ -74,7 +64,7 @@ function startMain() {
         return
       }
 
-      logStats(`${config.dev.chineseLog ? '主进程' : 'Main'}`, stats)
+      logStats('主进程', stats)
 
       if (electronProcess && electronProcess.kill) {
         manualRestart = true
@@ -132,7 +122,7 @@ function electronLog(data, color) {
       log += `  ${line}\n`
     })
     console.log(
-      chalk[color].bold(`┏ ${config.dev.chineseLog ? '主程序日志' : 'Electron'} -------------------`) +
+      chalk[color].bold('┏ 主程序日志 -------------------') +
       '\n\n' +
       log +
       chalk[color].bold('┗ ----------------------------') +
@@ -157,7 +147,7 @@ function greeting() {
       space: false
     })
   } else console.log(chalk.yellow.bold('\n  electron-vue'))
-  console.log(chalk.blue(`${config.dev.chineseLog ? '  准备启动...' : '  getting ready...'}`) + '\n')
+  console.log(chalk.blue('  准备启动...') + '\n')
 }
 
 async function init() {
