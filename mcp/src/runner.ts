@@ -1,4 +1,4 @@
-import { spawn, execSync, type ChildProcess } from 'node:child_process';
+﻿import { spawn, execSync, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -51,50 +51,10 @@ function tryParseJson(raw: string): unknown | null {
   }
 }
 
-function todayLogName(): string {
-  const date = new Date();
-  const yyyy = String(date.getFullYear());
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}.log`;
-}
-
-function readElectronLogFile(): string {
-  const appData = process.env.APPDATA || '';
-  if (!appData) return '';
-  const logPath = path.join(appData, 'matrix-video', 'logs', todayLogName());
-  try {
-    return fs.readFileSync(logPath, 'utf8');
-  } catch {
-    return '';
-  }
-}
-
-export function extractCliJson(stdout: string, stderr: string): unknown | null {
-  const fromStdio = tryParseJson(stdout) ?? tryParseJson(stderr);
-  if (fromStdio != null) return fromStdio;
-  const logText = readElectronLogFile();
-  const fromLog = tryParseJson(logText);
-  if (fromLog != null) return fromLog;
-  const chunks = logText.split(/(?=^\[[^\]]+\] \[(?:LOG|INFO|WARN|ERROR|DEBUG)\] )/m);
-  let found: unknown | null = null;
-  for (const chunk of chunks) {
-    const parsed = tryParseJson(chunk);
-    if (
-      Array.isArray(parsed) &&
-      parsed.every(
-        (item) => item && typeof item === 'object' && 'phone' in item && 'pt' in item
-      )
-    ) {
-      if (parsed.length > 0 || found == null) found = parsed;
-    }
-  }
-  return found;
-}
-
-export interface RunCliOptions {
-  onProgress?: (elapsed: number) => void;
-  progressIntervalMs?: number; // default 30000
+/** 矩媒仓库根目录。编译后位于 mcp/dist，向上三级即仓库根。 */
+export function matrixDir(): string {
+  const defaultDir = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..");
+  return process.env.MATRIXMEDIA_DIR ?? defaultDir;
 }
 
 export function resolveCliSpawn(args: string[]): {
@@ -103,11 +63,7 @@ export function resolveCliSpawn(args: string[]): {
   cwd: string;
   env: NodeJS.ProcessEnv;
 } {
-  const defaultDir = path.resolve(
-    fileURLToPath(import.meta.url),
-    '..', '..', '..'
-  );
-  const dir = process.env.MATRIXMEDIA_DIR ?? defaultDir;
+  const dir = matrixDir();
   const env: NodeJS.ProcessEnv = { ...process.env };
 
   const localElectronBin = process.platform === 'win32'
@@ -151,122 +107,79 @@ export function spawnCli(args: string[]): ChildProcess {
   });
 }
 
-export async function runCli(args: string[], opts?: RunCliOptions): Promise<CliResult> {
-  const { command, spawnArgs, cwd, env } = resolveCliSpawn(args);
-
-  return new Promise<CliResult>((resolve) => {
+/** 调用矩媒 publishing。发布、账号和平台定义都在 python/publishing。 */
+export function runMatrixPublish(
+  args: string[],
+  options?: { stdin?: string; timeoutMs?: number; onProgress?: (text: string) => void },
+): Promise<CliResult> {
+  const command = process.env.MATRIXMEDIA_PYTHON || "python";
+  const spawnArgs = command === "py"
+    ? ["-3", "-m", "publishing", ...args]
+    : ["-m", "publishing", ...args];
+  const timeoutMs = options?.timeoutMs ?? TIMEOUT_MS;
+  const dir = matrixDir();
+  const pythonDir = path.join(dir, "python");
+  const currentPath = process.env.PYTHONPATH;
+  return new Promise((resolve) => {
     const child = spawn(command, spawnArgs, {
-      cwd,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: dir,
+      env: {
+        ...process.env,
+        PYTHONUTF8: "1",
+        PYTHONPATH: currentPath ? `${pythonDir}${path.delimiter}${currentPath}` : pythonDir,
+      },
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
     });
-
-    const startTime = Date.now();
-    const interval = opts?.onProgress
-      ? setInterval(() => {
-          opts.onProgress!(Date.now() - startTime);
-        }, opts.progressIntervalMs ?? 30000)
-      : null;
-
-    const jsonLines: unknown[] = [];
-    let lastJson: unknown | null = null;
-    let stdoutRaw = '';   // full stdout accumulated for multi-line JSON
-    let stdoutBuf = '';   // line buffer for single-line JSON (publish progress)
-    let stderr = '';
+    if (options?.stdin != null && child.stdin) {
+      child.stdin.write(options.stdin);
+      child.stdin.end();
+    } else {
+      child.stdin?.end();
+    }
+    let stdout = "";
+    let stderr = "";
     let settled = false;
-
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      try {
-        child.kill('SIGTERM');
-      } catch {
-        /* ignore */
-      }
-      if (interval) clearInterval(interval);
-      resolve({ exitCode: 1, jsonLines, stderr, lastJson });
-    }, TIMEOUT_MS);
-
-    const processLine = (line: string): void => {
-      const trimmed = stripLogPrefix(line).trim();
-      if (trimmed.length === 0) return;
-      if (isNoiseLine(trimmed)) return;
-      try {
-        const parsed: unknown = JSON.parse(trimmed);
-        jsonLines.push(parsed);
-        lastJson = parsed;
-      } catch {
-        /* ignore non-JSON lines */
-      }
-    };
-
-    // Try to parse the entire stdout as a single JSON value (handles multi-line arrays/objects).
-    // Falls back to per-line parsing if whole-buffer parse fails.
-    const processFullOutput = (raw: string): void => {
-      // Strip noise lines before attempting whole-buffer parse
-      const cleaned = stripNoiseLines(raw);
-      if (cleaned.length === 0) return;
-      try {
-        const parsed: unknown = JSON.parse(cleaned);
-        jsonLines.push(parsed);
-        lastJson = parsed;
-      } catch {
-        // Not valid as a whole -- fall back to per-line
-        cleaned.split('\n').forEach(processLine);
-      }
-    };
-
-    child.stdout.on('data', (chunk: Buffer) => {
-      const text = chunk.toString('utf8');
-      stdoutRaw += text;
-      // Also do live per-line parsing for publish progress events
-      stdoutBuf += text;
-      let idx = stdoutBuf.indexOf('\n');
-      while (idx !== -1) {
-        const line = stdoutBuf.slice(0, idx);
-        stdoutBuf = stdoutBuf.slice(idx + 1);
-        processLine(line);
-        idx = stdoutBuf.indexOf('\n');
-      }
-    });
-
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString('utf8');
-    });
-
-    child.on('error', (err: Error) => {
+    const finish = (code: number) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      if (interval) clearInterval(interval);
-      stderr += String(err.message);
-      resolve({ exitCode: 1, jsonLines, stderr: stripNoiseLines(stderr), lastJson });
-    });
-
-    child.on('close', (code: number | null) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      if (interval) clearInterval(interval);
-      // Re-parse full stdout to catch multi-line JSON arrays (accounts / history)
-      // This may add duplicate single-line entries -- reset and reparse cleanly
-      jsonLines.length = 0;
-      lastJson = null;
-      if (stdoutBuf.length > 0) {
-        stdoutRaw += stdoutBuf;
-        stdoutBuf = '';
-      }
-      processFullOutput(stdoutRaw);
-      if (lastJson == null) {
-        lastJson = extractCliJson(stdoutRaw, stderr);
-        if (lastJson != null) jsonLines.push(lastJson);
-      }
+      const lastJson = tryParseJson(stdout) ?? tryParseJson(stderr);
       resolve({
-        exitCode: typeof code === 'number' ? code : 1,
-        jsonLines,
+        exitCode: code,
+        jsonLines: lastJson == null ? [] : [lastJson],
         stderr: stripNoiseLines(stderr),
         lastJson,
       });
+    };
+    const timer = setTimeout(() => {
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        /* ignore */
+      }
+      stderr += "\npublishing 超时";
+      finish(1);
+    }, timeoutMs);
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      const text = chunk.toString("utf8");
+      stderr += text;
+      if (!options?.onProgress) return;
+      for (const line of text.split(/\r?\n/)) {
+        if (line.startsWith("MM_PROGRESS\t")) {
+          options.onProgress(line.slice("MM_PROGRESS\t".length).trim());
+        }
+      }
+    });
+    child.on("error", (err: Error) => {
+      stderr += String(err.message);
+      finish(1);
+    });
+    child.on("close", (code: number | null) => {
+      finish(typeof code === "number" ? code : 1);
     });
   });
 }

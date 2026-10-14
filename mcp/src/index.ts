@@ -1,22 +1,22 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
-import { listAccountsTool, handleListAccounts } from './tools/accounts.js';
-import { publishVideoTool, handlePublishVideo } from './tools/publish.js';
+} from "@modelcontextprotocol/sdk/types.js";
+import { listAccountsTool, handleListAccounts } from "./tools/accounts.js";
+import { startPublishTool, pollTaskTool, handleStartPublish, handlePollTask } from "./tools/publish.js";
 import {
   loginTool,
   loginStatusTool,
   handleLogin,
   handleLoginStatus,
   type McpContent,
-} from './tools/login.js';
+} from "./tools/login.js";
 
 const server = new Server(
-  { name: 'matrixmedia', version: '0.1.0' },
-  { capabilities: { tools: {} } }
+  { name: "matrixmedia", version: "0.2.0" },
+  { capabilities: { tools: {} } },
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -25,7 +25,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       listAccountsTool,
       loginTool,
       loginStatusTool,
-      publishVideoTool,
+      startPublishTool,
+      pollTaskTool,
     ],
   };
 });
@@ -36,40 +37,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     let content: McpContent[];
     switch (name) {
-      case 'list_accounts':
-        content = [{ type: 'text', text: await handleListAccounts(args) }];
+      case "list_accounts":
+        content = [{ type: "text", text: await handleListAccounts(args) }];
         break;
-      case 'login':
+      case "login":
         content = await handleLogin(args);
         break;
-      case 'login_status':
+      case "login_status":
         content = await handleLoginStatus(args);
         break;
-      case 'publish_video': {
-        const progressToken = (request.params as any)._meta?.progressToken as string | undefined;
-        content = [{
-          type: 'text',
-          text: await handlePublishVideo(args,
-            progressToken
-              ? (elapsed: number) => {
-                  server.notification({
-                    method: 'notifications/progress',
-                    params: { progressToken, progress: Math.floor(elapsed / 1000), total: 2100 },
-                  });
-                }
-              : undefined
-          ),
-        }];
+      case "start_publish":
+        content = [{ type: "text", text: await handleStartPublish(args) }];
         break;
-      }
+      case "poll_task":
+        content = [{ type: "text", text: handlePollTask(args) }];
+        break;
       default:
-        throw new Error('Unknown tool: ' + name);
+        throw new Error("Unknown tool: " + name);
     }
     return { content };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return {
-      content: [{ type: 'text', text: message }],
+      content: [{ type: "text", text: message }],
       isError: true,
     };
   }

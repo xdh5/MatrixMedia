@@ -1,6 +1,7 @@
 "use strict";
 
 import { spawnSync } from "child_process";
+import path from "path";
 import { resolveMatrixRoot } from "./matrixDataPaths";
 
 const OFFICIAL_PLATFORMS = new Set(["youtube", "yt", "ytb", "tiktok", "tk", "instagram", "ig", "ins", "facebook", "fb"]);
@@ -20,15 +21,23 @@ export function officialPlatformFromArgv(argv) {
 
 function pythonArgs(args) {
   const command = process.env.MATRIXMEDIA_PYTHON || "python";
-  if (command === "py") return { command, args: ["-3", "-m", "official.cli", ...args] };
-  return { command, args: ["-m", "official.cli", ...args] };
+  if (command === "py") return { command, args: ["-3", "-m", "platform_api.cli", ...args] };
+  return { command, args: ["-m", "platform_api.cli", ...args] };
 }
 
-/** 调用矩媒内的官方发布包，返回解析后的 JSON。 */
+/** 调用 python/platform_api，返回解析后的 JSON。 */
 export function runOfficialPython(args) {
+  const root = resolveMatrixRoot();
   const spec = pythonArgs(args);
+  const pythonDir = path.join(root, "python");
+  const currentPath = process.env.PYTHONPATH;
   const result = spawnSync(spec.command, spec.args, {
-    cwd: resolveMatrixRoot(),
+    cwd: root,
+    env: {
+      ...process.env,
+      PYTHONUTF8: "1",
+      PYTHONPATH: currentPath ? `${pythonDir}${path.delimiter}${currentPath}` : pythonDir,
+    },
     encoding: "utf8",
     maxBuffer: 20 * 1024 * 1024,
     windowsHide: true,

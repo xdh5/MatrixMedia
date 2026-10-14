@@ -1,265 +1,111 @@
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
-import { runCli } from "../runner.js";
+import { runMatrixPublish } from "../runner.js";
+import { submitTask, pollTask } from "../tasks.js";
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object";
-}
+const publishItemSchema = {
+  type: "object",
+  properties: {
+    file: { type: "string", description: "本地视频绝对路径。浏览器平台和 YouTube 必填" },
+    video_url: { type: "string", description: "公网视频地址。TikTok、Instagram、Facebook 必填" },
+    title: { type: "string", description: "视频标题" },
+    description: { type: "string", description: "作品描述。不传时海外平台回退为标题" },
+    tags: { type: "string", description: "标签。抖音、快手、视频号会自动补 #" },
+    bt2: { type: "string", description: "短标题。视频号填写时须为 6～16 字" },
+    publication_id: { type: "string", description: "YouTube 去重用的产物标识，可选" },
+    creative_statement: { type: "string", description: "创作声明。浏览器平台默认 ai_generated" },
+    draft: { type: "boolean", description: "浏览器平台保存草稿。不能和预约同时使用" },
+    sph_product_id: { type: "string", description: "仅视频号商品编号" },
+  },
+  required: ["title"],
+} as const;
 
-function isPuppeteerDoneResult(
-  value: unknown
-): value is Record<string, unknown> {
-  return isObject(value) && value.channel === "puppeteerFile-done";
-}
-
-// Maps short platform codes to Chinese names used in session partition strings
-const PLATFORM_CN: Record<string, string> = {
-  dy: "抖音",
-  ks: "快手",
-  blbl: "哔哩哔哩",
-  bjh: "百家号",
-  tt: "头条",
-  sph: "视频号",
-};
-
-// Derives the Electron session partition string from phone + platform code.
-// Convention: persist:<phone><平台中文名>  e.g. persist:13800138000抖音
-function derivePartition(phone: string, platform: string): string {
-  const cn = PLATFORM_CN[platform] ?? platform;
-  return `persist:${phone}${cn}`;
-}
-
-export const publishVideoTool: Tool = {
-  name: "publish_video",
+export const startPublishTool: Tool = {
+  name: "start_publish",
   description:
-    "Publish a video to a target platform via MatrixMedia. Requires a logged-in account " +
-    "identified by phone number. Partition is derived automatically. " +
-    "视频号 platform=sph 可选传 bt2（6～16字短标题），未传时不填写短标题。 " +
-    "Long-running -- emits progress notifications when a progressToken is supplied by the client.",
+    "按一个 data 账号组，把多条视频一次发到多个平台，并立即返回任务路径。" +
+    "实际发布调用矩媒 publishing，与 media-factory 发布 MCP 使用同一套平台参数和预约规则。" +
+    "立即发布用 publish_at=now；预约用带时区的 ISO 8601。各平台时间不同时传 publish_at_by_platform。" +
+    "完成后用 poll_task 读取同一 task_path。",
   inputSchema: {
     type: "object",
     properties: {
-      platform: {
+      account_group: {
         type: "string",
-        enum: ["dy", "ks", "blbl", "bjh", "tt", "sph"],
-        description:
-          "Target platform. dy=Douyin ks=Kuaishou blbl=Bilibili bjh=Baijiahao tt=Toutiao sph=Shipinhao",
+        enum: ["finance", "korean", "chinese"],
+        description: "data 目录中的账号组",
       },
-      file: {
+      platforms: {
+        type: "array",
+        items: { type: "string" },
+        description: "要发布的平台列表，例如 [\"douyin\", \"youtube\", \"tiktok\"]",
+      },
+      items: {
+        type: "array",
+        items: publishItemSchema,
+        description: "要发布的视频。每条视频都会发到全部所选平台",
+      },
+      publish_mode: {
         type: "string",
-        description: "Absolute path to the video file to upload.",
+        enum: ["immediate", "scheduled"],
+        description: "未在 publish_at_by_platform 单独指定的平台使用这个模式",
       },
-      title: {
+      publish_at: {
         type: "string",
-        description: "Video title.",
+        description: "immediate 时必须是 now；scheduled 时必须是带时区的未来 ISO 8601",
       },
-      description: {
-        type: "string",
-        description: "可选的作品描述。",
-      },
-      phone: {
-        type: "string",
-        description:
-          "Phone number of the account to publish with. Used to derive the session partition automatically.",
-      },
-      bt2: {
-        type: "string",
-        description:
-          "可选短标题。视频号填写时建议 6～16 字；未传时不填写，也不回退为长标题。",
-      },
-      tags: {
-        type: "string",
-        description: "Optional tags string.",
-      },
-      address: {
-        type: "string",
-        description: "Optional location / 地址.",
-      },
-      publishAt: {
-        type: "string",
-        description:
-          '可选定时发布时间，格式为 "YYYY-MM-DD HH:mm:ss"。抖音、快手、视频号、百家号和头条会立即上传并使用创作者平台官方定时发布；其他平台沿用矩媒本地定时。',
-      },
-      show: {
-        type: "boolean",
-        description: "If true, show the underlying browser window.",
-      },
-      draft: {
-        type: "boolean",
-        description:
-          "If true, save the video to the platform draft box instead of publishing it.",
-      },
-      creativeStatement: {
-        type: "string",
-        description:
-          "Optional creative statement / mark tag. For Shipinhao supports values like none, ai_generated, fiction, or Chinese labels such as 含AI生成内容.",
-      },
-      sphProductId: {
-        type: "string",
-        description:
-          "Shipinhao product ID for attaching a shop product. Ignored for other platforms. Prefer this over sphLink for product-only use.",
-      },
-      sphLink: {
+      publish_at_by_platform: {
         type: "object",
-        description:
-          "Optional Shipinhao-only link configuration. Ignored for other platforms. If sphProductId is also set, sphProductId wins.",
-        properties: {
-          type: {
-            type: "string",
-            enum: ["none", "product"],
-            description:
-              "Shipinhao link type. product selects a product by ID.",
-          },
-          value: {
-            type: "string",
-            description: "Shipinhao product ID. Required when type=product.",
-          },
-        },
-        required: ["type"],
+        additionalProperties: { type: "string" },
+        description: "按平台覆盖时间。值为 now 或带时区的 ISO 8601",
       },
     },
-    required: ["platform", "file", "title", "phone"],
+    required: ["account_group", "platforms", "items"],
   },
 };
 
-export async function handlePublishVideo(
-  args: Record<string, unknown>,
-  onProgress?: (elapsed: number) => void
-): Promise<string> {
-  const platform = args.platform;
-  const file = args.file;
-  const title = args.title;
-  const description = args.description;
-  const phone = args.phone;
-  const bt2 = args.bt2;
-  const tags = args.tags;
-  const address = args.address;
-  const publishAt = args.publishAt;
-  const show = args.show;
-  const draft = args.draft;
-  const creativeStatement =
-    args.creativeStatement == null ? "" : String(args.creativeStatement).trim();
-  const sphProductId =
-    args.sphProductId == null ? "" : String(args.sphProductId).trim();
-  const sphLink = args.sphLink;
+export const pollTaskTool: Tool = {
+  name: "poll_task",
+  description: "轮询 start_publish 返回的任务。done=true 后看 status、result 或 error。",
+  inputSchema: {
+    type: "object",
+    properties: {
+      task_path: { type: "string", description: "start_publish 返回的 task_path" },
+    },
+    required: ["task_path"],
+  },
+};
 
-  if (typeof phone !== "string" || phone.length === 0) {
-    throw new Error("phone must be non-empty string");
+function publishError(result: { exitCode: number; lastJson: unknown; stderr: string }): string {
+  const payload = result.lastJson;
+  if (payload && typeof payload === "object" && "error" in payload) {
+    return String((payload as { error?: unknown }).error || "").trim();
   }
+  return result.stderr.trim().slice(0, 500) || `publishing 退出码 ${result.exitCode}`;
+}
 
-  if (typeof file !== "string" || file.length === 0) {
-    throw new Error("file must be non-empty string");
-  }
-
-  const shortTitle = bt2 == null ? "" : String(bt2).trim();
-  if (String(platform) === "sph" && shortTitle) {
-    const length = [...shortTitle].length;
-    if (length < 6 || length > 16) {
-      throw new Error(`视频号 bt2 须为 6～16 字，当前 ${length} 字：${shortTitle}`);
-    }
-  }
-
-  const partition = derivePartition(phone, String(platform));
-
-  let sphLinkArgs: string[] = [];
-  if (String(platform) === "sph") {
-    if (sphProductId) {
-      sphLinkArgs = ["--sph-product-id", sphProductId];
-    } else if (sphLink && typeof sphLink === "object") {
-      const link = sphLink as Record<string, unknown>;
-      const type = String(link.type || "");
-      const value = link.value == null ? "" : String(link.value).trim();
-      if (type === "product" && !value) {
-        throw new Error("sphLink.value is required when sphLink.type=product");
-      }
-      if (type === "product" || value) {
-        sphLinkArgs = value
-          ? ["--sph-product-id", value]
-          : ["--sph-link-type", type];
-      } else if (type) {
-        sphLinkArgs = ["--sph-link-type", type];
-      }
-    }
-  }
-
-  const cliArgs: string[] = [
-    "publish",
-    "-p",
-    String(platform),
-    "-f",
-    file,
-    "--title",
-    String(title),
-    ...(description ? ["--description", String(description)] : []),
-    "--name",
-    String(title),
-    "--phone",
-    phone,
-    "--partition",
-    partition,
-    ...(shortTitle ? ["--bt2", shortTitle] : []),
-    ...(tags ? ["--tags", String(tags)] : []),
-    ...(address ? ["--address", String(address)] : []),
-    ...(publishAt ? ["--publish-at", String(publishAt)] : []),
-    ...(show ? ["--show"] : []),
-    ...(draft ? ["--draft"] : []),
-    ...(creativeStatement ? ["--creative-statement", creativeStatement] : []),
-    ...sphLinkArgs,
-  ];
-
-  const result = await runCli(cliArgs, { onProgress });
-
-  if (result.exitCode === 0) {
-    const lastJson = result.lastJson;
-    if (
-      lastJson !== null &&
-      typeof lastJson === "object" &&
-      (lastJson as { scheduled?: unknown }).scheduled === true
-    ) {
-      return JSON.stringify({
-        status: "scheduled",
-        id: (lastJson as any).id,
-        publishAt: (lastJson as any).publishAt,
-        message: (lastJson as any).message,
-      });
-    }
-
-    if (!isPuppeteerDoneResult(lastJson)) {
-      throw new Error("CLI 未返回最终发布结果（缺少 puppeteerFile-done）");
-    }
-    if (lastJson.status !== true) {
-      throw new Error(String(lastJson.message || "视频发布失败"));
-    }
-    return JSON.stringify({
-      status: lastJson.resultStatus ?? "success",
-      publishMode: lastJson.publishMode,
-      message: lastJson.message ?? "发布成功",
+export async function handleStartPublish(args: Record<string, unknown>): Promise<string> {
+  const accountGroup = String(args.account_group || "").trim();
+  if (!accountGroup) throw new Error("account_group 不能为空");
+  const started = submitTask(`publish:${accountGroup}`, "publish", async (progress) => {
+    const result = await runMatrixPublish(["publish"], {
+      stdin: JSON.stringify(args),
+      onProgress: progress,
     });
-  }
+    if (result.exitCode !== 0) {
+      throw new Error(publishError(result));
+    }
+    const payload = result.lastJson;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new Error("publishing 没有返回发布结果");
+    }
+    if ("error" in payload && (payload as { error?: unknown }).error) {
+      throw new Error(String((payload as { error?: unknown }).error));
+    }
+    return payload;
+  });
+  return JSON.stringify(started);
+}
 
-  if (result.exitCode === 4) {
-    return JSON.stringify({
-      status: "needs_attention",
-      publishMode: "draft",
-      outcome: (result.lastJson as any)?.outcome ?? "draft_saved",
-      needsAttention: true,
-      message:
-        (result.lastJson as any)?.message ?? "已转存草稿，请检查视频号链接",
-    });
-  }
-
-  if (result.exitCode === 3) {
-    throw new Error(
-      (result.lastJson as any)?.message ?? "发布失败(登录态异常)"
-    );
-  }
-
-  if (result.exitCode === 1) {
-    throw new Error("发布超时或失败: " + result.stderr.slice(0, 300));
-  }
-
-  if (result.exitCode === 2) {
-    throw new Error("参数错误: " + result.stderr.slice(0, 200));
-  }
-
-  throw new Error("未知错误 exit " + String(result.exitCode));
+export function handlePollTask(args: Record<string, unknown>): string {
+  return JSON.stringify(pollTask(String(args.task_path || "")));
 }

@@ -7,10 +7,10 @@ import json
 import os
 import sys
 
-from official.facebook.publish_to_facebook import list_facebook_accounts, publish_to_facebook
-from official.instagram.publish_to_instagram import list_instagram_accounts, publish_to_instagram
-from official.tiktok.publish_to_tiktok import list_tiktok_accounts, publish_to_tiktok
-from official.youtube.publish_to_youtube import list_youtube_accounts, publish_to_youtube
+from platform_api.facebook.publish_to_facebook import list_facebook_accounts, publish_to_facebook
+from platform_api.instagram.publish_to_instagram import list_instagram_accounts, publish_to_instagram
+from platform_api.tiktok.publish_to_tiktok import list_tiktok_accounts, publish_to_tiktok
+from platform_api.youtube.publish_to_youtube import list_youtube_accounts, publish_to_youtube
 
 
 def _dump(payload: dict | list) -> None:

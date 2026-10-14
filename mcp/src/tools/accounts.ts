@@ -1,47 +1,42 @@
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { runCli } from '../runner.js';
+import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { runMatrixPublish } from "../runner.js";
 
 export const listAccountsTool: Tool = {
-  name: 'list_accounts',
+  name: "list_accounts",
   description:
-    'List MatrixMedia locally logged-in accounts. Returns JSON array with phone/platform/partition fields.',
+    "列出 data 目录里的账号组及其平台账号。浏览器平台来自 data/<账号组>/Partitions，" +
+    "YouTube、TikTok、Instagram、Facebook 来自该账号组的官方凭据。结果与统一发布使用同一份 publishing。",
   inputSchema: {
-    type: 'object',
+    type: "object",
     properties: {
+      account_group: {
+        type: "string",
+        enum: ["finance", "korean", "chinese"],
+        description: "可选。只看某一个账号组；不传则列出 data 里现有的全部账号组",
+      },
       platform: {
-        type: 'string',
-        enum: ['dy', 'ks', 'blbl', 'bjh', 'tt', 'sph', 'xhs'],
+        type: "string",
         description:
-          'Optional platform filter. dy=Douyin ks=Kuaishou blbl=Bilibili bjh=Baijiahao tt=Toutiao sph=Shipinhao xhs=Xiaohongshu',
+          "可选平台过滤。国内：douyin / kuaishou / toutiao / wechat_channels / baijiahao / bilibili / xiaohongshu；海外：youtube / tiktok / instagram / facebook",
       },
     },
     required: [],
   },
 };
 
-export async function handleListAccounts(
-  args: Record<string, unknown>
-): Promise<string> {
-  const platform = args.platform;
-  const cliArgs: string[] = [
-    'accounts',
-    '--json',
-    ...(platform !== undefined && platform !== null
-      ? ['-p', String(platform)]
-      : []),
-  ];
-
-  const result = await runCli(cliArgs);
-  if (result.exitCode === 0) {
-    if (result.lastJson == null) {
-      throw new Error(
-        'list_accounts 没有从 stdout 读到账号 JSON。矩媒可能把结果写进了主进程日志。请重新编译 Electron 主进程后再试。' +
-          (result.stderr ? ` stderr: ${result.stderr.slice(0, 400)}` : '')
-      );
-    }
-    return JSON.stringify(result.lastJson);
+export async function handleListAccounts(args: Record<string, unknown>): Promise<string> {
+  const cliArgs = ["accounts"];
+  const accountGroup = args.account_group == null ? "" : String(args.account_group).trim();
+  const platform = args.platform == null ? "" : String(args.platform).trim();
+  if (accountGroup) cliArgs.push("--group", accountGroup);
+  if (platform) cliArgs.push("--platform", platform);
+  const result = await runMatrixPublish(cliArgs, { timeoutMs: 120_000 });
+  if (result.exitCode !== 0) {
+    const payload = result.lastJson;
+    const message = payload && typeof payload === "object" && "error" in payload
+      ? String((payload as { error?: unknown }).error || "")
+      : result.stderr;
+    throw new Error(message || "读取账号组失败");
   }
-  throw new Error(
-    'list_accounts failed (exit ' + String(result.exitCode) + '): ' + result.stderr
-  );
+  return JSON.stringify(result.lastJson);
 }

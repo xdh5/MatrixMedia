@@ -52,78 +52,96 @@ cd mcp && npm install && npm run build
 
 ## Tool 一览
 
-| Tool              | 底层 CLI                  | 说明                                           |
-| ----------------- | ------------------------- | ---------------------------------------------- |
-| `list_accounts`   | `cli accounts --json`     | 列出本机已登录账号，支持按平台过滤             |
-| `login`           | `cli login --save-qr-png` | 截取抖音/视频号登录二维码，返回图片给 Agent    |
-| `login_status`    | 查询进行中的 `cli login`  | 等待用户扫码，直到登录成功                     |
-| `publish_video`   | `cli publish ...`         | 发布视频（最长约 35 分钟，支持草稿和定时发布） |
+| Tool | 说明 |
+| --- | --- |
+| `list_accounts` | 列出 `data/<账号组>` 里的平台账号 |
+| `login` | 为账号组扫码，或打开海外平台的系统浏览器授权 |
+| `login_status` | 查询扫码或授权结果 |
+| `start_publish` | 按账号组把多条视频一次发到多个平台，立即返回任务 |
+| `poll_task` | 轮询发布任务 |
+
+账号只从 `data/finance`、`data/korean`、`data/chinese` 解析，不传手机号。浏览器会话看 `Partitions`，YouTube、TikTok、Instagram、Facebook 看该账号组的官方凭据。平台账号、预约时间和实际上传都由矩媒的 `python -m publishing` 完成，media-factory 的发布 MCP 调用同一份代码。官方接口在 `python/platform_api`。
 
 ### list_accounts
 
-| 参数       | 必填 | 说明                                                                              |
-| ---------- | ---- | --------------------------------------------------------------------------------- |
-| `platform` | 否   | 平台过滤：`dy` / `ks` / `blbl` / `bjh` / `tt` / `sph` / `xhs` |
+| 参数 | 必填 | 说明 |
+| --- | --- | --- |
+| `account_group` | 否 | `finance` / `korean` / `chinese`。不传则列出 data 里现有账号组 |
+| `platform` | 否 | 平台过滤 |
 
 ### login
 
-| 参数         | 必填 | 说明                                      |
-| ------------ | ---- | ----------------------------------------- |
-| `platform`   | 是   | `dy` / `sph` / `ks`                       |
-| `phone`      | 是   | 与 `list_accounts` / `publish_video` 一致 |
-| `timeoutSec` | 否   | 等待扫码秒数，默认 900                    |
+| 参数 | 必填 | 说明 |
+| --- | --- | --- |
+| `platform` | 是 | 扫码：`douyin` / `kuaishou` / `toutiao` / `wechat_channels`；官方授权：`youtube` / `tiktok` / `instagram` / `facebook` |
+| `account_group` | 是 | data 中的账号组 |
+| `timeoutSec` | 否 | 等待秒数，默认 900 |
+| `force` | 否 | 登录失效时强制刷新 |
 
-返回二维码图片 + JSON（`status=waiting_scan` 时带 `login_id`）。Agent 必须把图片发给用户扫码。
+扫码平台返回二维码图片。Agent 必须把 `qr_path` 发给用户。海外平台返回 `waiting_authorization`，用户在系统浏览器里完成授权。
 
 ### login_status
 
-| 参数       | 必填 | 说明                    |
-| ---------- | ---- | ----------------------- |
-| `login_id` | 是   | `login` 返回的 `login_id` |
+| 参数 | 必填 | 说明 |
+| --- | --- | --- |
+| `login_id` | 是 | `login` 返回的 `login_id` |
 
-`waiting_scan` 时可能附带最新二维码；`success` 后即可发布。
+### start_publish
 
-### publish_video
+一次调用覆盖多条视频和多个平台。耗时发布在后台执行，调用后用 `poll_task` 轮询。
 
-| 参数           | 必填 | 说明                                                          |
-| -------------- | ---- | ------------------------------------------------------------- |
-| `platform`     | 是   | `dy` / `ks` / `blbl` / `bjh` / `tt` / `sph`                   |
-| `file`         | 是   | 视频文件绝对路径                                              |
-| `title`        | 是   | 视频标题                                                      |
-| `phone`        | 是   | 账号手机号，用于推导 session partition                        |
-| `bt2`          | 否   | 第二标题 / 视频号短标                                         |
-| `tags`         | 否   | 标签字符串                                                    |
-| `address`      | 否   | 地址（百家号等）                                              |
-| `publishAt`    | 否   | 定时发布，`YYYY-MM-DD HH:mm`                                  |
-| `show`         | 否   | 是否显示底层浏览器窗口                                        |
-| `draft`             | 否   | `true` 时保存到草稿箱，不直接发布                             |
-| `creativeStatement` | 否   | 创作声明 / 视频号视频标注                                     |
-| `sphProductId`      | 否   | 视频号商品上架编号（推荐）                                    |
-| `sphLink`           | 否   | 视频号链接对象；与 `sphProductId` 同时传时优先 `sphProductId` |
+| 参数 | 必填 | 说明 |
+| --- | --- | --- |
+| `account_group` | 是 | `finance` / `korean` / `chinese` |
+| `platforms` | 是 | 平台列表 |
+| `items` | 是 | 视频列表。每条至少有 `title`；浏览器平台和 YouTube 需要 `file`；TikTok、Instagram、Facebook 需要 `video_url` |
+| `publish_mode` | 否 | `immediate` 或 `scheduled`。平台没有单独时间时必填 |
+| `publish_at` | 否 | 立即发布为 `now`；预约为带时区的未来 ISO 8601 |
+| `publish_at_by_platform` | 否 | 按平台覆盖。值为 `now` 或带时区 ISO 时间 |
 
-视频号商品上架草稿调用参数示例：
+预约按平台处理：
+
+- 抖音、快手、头条、视频号、百家号：转成北京时间 `YYYY-MM-DD HH:mm:ss`，必须由平台官方预约确认。
+- YouTube、TikTok、Instagram、Facebook：原样把带时区的 ISO 时间交给官方接口。
+- 哔哩哔哩、小红书：只能立即发布。
+
+示例：
 
 ```json
 {
-  "platform": "sph",
-  "file": "D:\\videos\\a.mp4",
-  "title": "视频标题",
-  "phone": "13800138000",
-  "bt2": "视频号短标题",
-  "draft": true,
-  "sphProductId": "10000591263144",
-  "creativeStatement": "含AI生成内容"
+  "account_group": "finance",
+  "platforms": ["douyin", "youtube", "tiktok"],
+  "items": [
+    {
+      "file": "D:\\videos\\a.mp4",
+      "video_url": "https://example.com/a.mp4",
+      "title": "视频标题",
+      "description": "描述"
+    }
+  ],
+  "publish_at_by_platform": {
+    "douyin": "2026-10-15T20:00:00+08:00",
+    "youtube": "now",
+    "tiktok": "2026-10-15T21:00:00+08:00"
+  }
 }
 ```
 
-当 `platform` 不是 `sph` 时，`sphProductId` / `sphLink` 会被忽略。若商品添加失败但视频已成功转存草稿，Tool 返回 `status: needs_attention`，不会误报为发布成功。
+### poll_task
+
+| 参数 | 必填 | 说明 |
+| --- | --- | --- |
+| `task_path` | 是 | `start_publish` 返回的任务文件 |
+
+`done=true` 后看 `result.status`：`success`、`partial` 或 `failed`。`partial` 时 `published` 和 `failed` 都会保留。
 
 ## 登录说明
 
-- 发布前用 `list_accounts` 看登录态。
-- **抖音 / 视频号 / 快手未登录**：调用 `login(platform, phone)`。工具会打开登录页、截取二维码，并以图片返回。Agent 必须把这张图发给用户扫码，然后反复调用 `login_status(login_id)`，直到 `status=success`，再 `publish_video`。
-- **其它平台未登录**：使用 `cli login` 扫码；当前登录命令支持抖音、快手、头条和视频号。
-- `login` 与 `publish` 共用同一 session partition，Cookie 在 MatrixMedia 目录的 `data` 中。
+- 发布前用 `list_accounts` 确认账号组里有目标平台。
+- 抖音、快手、头条、视频号未登录时调用 `login`，把二维码发给用户，再用 `login_status` 等到 `success`。
+- YouTube、TikTok、Instagram、Facebook 未登录时同样调用 `login`，用户在弹出的浏览器里授权。
+- 登录数据写入 `data/<账号组>`。
+
 
 ## 相关文档
 

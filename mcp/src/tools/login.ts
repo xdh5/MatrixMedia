@@ -3,10 +3,15 @@ import os from "node:os";
 import path from "node:path";
 import type { ChildProcess } from "node:child_process";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
-import { spawnCli } from "../runner.js";
+import { spawnCli, runMatrixPublish } from "../runner.js";
 
-const LOGIN_PLATFORMS = ["dy", "sph", "ks"] as const;
-type LoginPlatform = (typeof LOGIN_PLATFORMS)[number];
+interface LoginPlatform {
+  code: string;
+  cli: string;
+  label: string;
+  official: boolean;
+  qr_login: boolean;
+}
 
 export type McpContent =
   | { type: "text"; text: string }
@@ -14,12 +19,14 @@ export type McpContent =
 
 type LoginSession = {
   loginId: string;
-  platform: LoginPlatform;
-  phone: string;
+  platform: string;
+  accountGroup: string;
+  official: boolean;
   qrPath: string;
   child: ChildProcess;
   exitCode: number | null;
   stderr: string;
+  stdout: string;
 };
 
 const sessions = new Map<string, LoginSession>();
@@ -31,18 +38,39 @@ function asNonEmpty(value: unknown, name: string): string {
   return value.trim();
 }
 
-function asPlatform(value: unknown): LoginPlatform {
-  const platform = asNonEmpty(value, "platform");
-  if (platform !== "dy" && platform !== "sph" && platform !== "ks") {
-    throw new Error(
-      "login 目前只支持抖音 dy、视频号 sph 和快手 ks。其它平台请在矩媒 GUI 里扫码登录后再 publish_video。"
-    );
+async function asLoginPlatform(value: unknown): Promise<LoginPlatform> {
+  const name = asNonEmpty(value, "platform");
+  const result = await runMatrixPublish(["platform", name], { timeoutMs: 30_000 });
+  const spec = result.lastJson;
+  if (result.exitCode !== 0 || !spec || typeof spec !== "object" || Array.isArray(spec)) {
+    const message = spec && typeof spec === "object" && "error" in spec
+      ? String((spec as { error?: unknown }).error || "")
+      : result.stderr;
+    throw new Error(message || `未知平台：${name}`);
+  }
+  const platform = spec as LoginPlatform;
+  if (!platform.qr_login && !platform.official) {
+    throw new Error(`${platform.label}不能在 MCP 里登录。请先在矩媒里准备好该平台会话。`);
   }
   return platform;
 }
 
-function makeLoginId(platform: string, phone: string): string {
-  return `${platform}:${phone}`;
+async function requireDataGroup(name: string): Promise<string> {
+  const group = asNonEmpty(name, "account_group").toLowerCase();
+  const result = await runMatrixPublish(["groups"], { timeoutMs: 30_000 });
+  const groups = Array.isArray(result.lastJson) ? result.lastJson.map((item) => String(item)) : [];
+  if (result.exitCode !== 0 || !groups.includes(group)) {
+    throw new Error(
+      groups.length > 0
+        ? `账号组「${name}」不在 data 中。现有账号组：${groups.join("、")}`
+        : "data 目录下没有 finance、korean 或 chinese 账号组",
+    );
+  }
+  return group;
+}
+
+function makeLoginId(platform: string, accountGroup: string): string {
+  return `${platform}:${accountGroup}`;
 }
 
 function qrPathFor(loginId: string): string {
@@ -82,6 +110,9 @@ function stopSession(loginId: string): void {
 }
 
 function attachSession(session: LoginSession): void {
+  session.child.stdout?.on("data", (chunk: Buffer) => {
+    session.stdout += chunk.toString("utf8");
+  });
   session.child.stderr?.on("data", (chunk: Buffer) => {
     session.stderr += chunk.toString("utf8");
   });
@@ -95,7 +126,7 @@ function payload(session: LoginSession, status: string, extra: Record<string, un
     status,
     login_id: session.loginId,
     platform: session.platform,
-    phone: session.phone,
+    account_group: session.accountGroup,
     qr_path: session.qrPath,
     message:
       status === "waiting_scan"
@@ -113,19 +144,19 @@ function withQr(session: LoginSession, text: string): McpContent[] {
 export const loginTool: Tool = {
   name: "login",
   description:
-    "打开抖音、视频号或快手扫码登录页，截取二维码图片返回给 Agent。Agent 必须把 qr_path 同时写入最终回复的 Markdown 图片和可点击文件链接，禁止只依赖会折叠的工具输出；随后结束当前对话。用户确认扫码后再用 login_status 查询，直到 success 再 publish_video。" +
-    "仅支持 platform=dy / sph / ks。其它平台请让用户在矩媒 GUI 登录。",
+    "为 data 账号组登录平台。抖音、快手、头条、视频号返回扫码二维码；YouTube、TikTok、Instagram、Facebook 打开系统浏览器授权。" +
+    "扫码时必须把 qr_path 写进回复里的图片和文件链接。授权或扫码完成后用 login_status 查询，直到 success 再 start_publish。",
   inputSchema: {
     type: "object",
     properties: {
       platform: {
         type: "string",
-        enum: ["dy", "sph", "ks"],
-        description: "dy=抖音，sph=视频号，ks=快手",
+        description: "扫码：douyin / kuaishou / toutiao / wechat_channels；官方授权：youtube / tiktok / instagram / facebook",
       },
-      phone: {
+      account_group: {
         type: "string",
-        description: "账号手机号或账号组名，须与 list_accounts / publish_video 的 phone 一致",
+        enum: ["finance", "korean", "chinese"],
+        description: "data 目录中的账号组，登录态写入 data/<账号组>",
       },
       timeoutSec: {
         type: "number",
@@ -136,14 +167,14 @@ export const loginTool: Tool = {
         description: "检测到假在线或登录失效时设为 true，强制刷新旧会话并返回新二维码",
       },
     },
-    required: ["platform", "phone"],
+    required: ["platform", "account_group"],
   },
 };
 
 export const loginStatusTool: Tool = {
   name: "login_status",
   description:
-    "查询 login 扫码结果。waiting_scan 时把最新二维码再发给用户；success 后才能 publish_video。",
+    "查询 login 结果。waiting_scan 时把最新二维码再发给用户；waiting_authorization 时请用户在浏览器完成授权；success 后才能 start_publish。",
   inputSchema: {
     type: "object",
     properties: {
@@ -157,14 +188,15 @@ export const loginStatusTool: Tool = {
 };
 
 export async function handleLogin(args: Record<string, unknown>): Promise<McpContent[]> {
-  const platform = asPlatform(args.platform);
-  const phone = asNonEmpty(args.phone, "phone");
+  const spec = await asLoginPlatform(args.platform);
+  const platform = spec.code;
+  const accountGroup = await requireDataGroup(asNonEmpty(args.account_group, "account_group"));
   const timeoutSec =
     typeof args.timeoutSec === "number" && Number.isFinite(args.timeoutSec)
       ? Math.max(30, Math.floor(args.timeoutSec))
       : 900;
   const force = args.force === true;
-  const loginId = makeLoginId(platform, phone);
+  const loginId = makeLoginId(platform, accountGroup);
   stopSession(loginId);
 
   const qrFile = qrPathFor(loginId);
@@ -177,9 +209,9 @@ export async function handleLogin(args: Record<string, unknown>): Promise<McpCon
   const cliArgs = [
     "login",
     "-p",
-    platform,
+    spec.cli,
     "--phone",
-    phone,
+    accountGroup,
     "--save-qr-png",
     qrFile,
     "--timeout-sec",
@@ -188,21 +220,33 @@ export async function handleLogin(args: Record<string, unknown>): Promise<McpCon
   if (force) {
     cliArgs.push("--force");
   }
-  if (platform === "dy") {
+  if (spec.code === "douyin") {
     cliArgs.push("--puppeteer-headless");
   }
   const child = spawnCli(cliArgs);
   const session: LoginSession = {
     loginId,
     platform,
-    phone,
+    accountGroup,
+    official: spec.official,
     qrPath: qrFile,
     child,
     exitCode: null,
     stderr: "",
+    stdout: "",
   };
   attachSession(session);
   sessions.set(loginId, session);
+  if (session.official) {
+    return [
+      {
+        type: "text",
+        text: JSON.stringify(payload(session, "waiting_authorization", {
+          message: "已打开系统浏览器。请用该账号组对应的账号完成授权，然后调用 login_status。",
+        })),
+      },
+    ];
+  }
 
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
@@ -215,8 +259,8 @@ export async function handleLogin(args: Record<string, unknown>): Promise<McpCon
             status: "success",
             login_id: loginId,
             platform,
-            phone,
-            message: "该账号已登录，无需扫码，可直接 publish_video",
+            account_group: accountGroup,
+            message: "该账号已登录，无需扫码，可直接 start_publish",
           }),
         },
       ];
@@ -258,8 +302,8 @@ export async function handleLoginStatus(args: Record<string, unknown>): Promise<
           status: "success",
           login_id: loginId,
           platform: session.platform,
-          phone: session.phone,
-          message: "扫码登录成功，可以 publish_video",
+          account_group: session.accountGroup,
+          message: session.official ? "官方授权成功，可以 start_publish" : "扫码登录成功，可以 start_publish",
         }),
       },
     ];
@@ -272,6 +316,16 @@ export async function handleLoginStatus(args: Record<string, unknown>): Promise<
         ? `扫码超时或仍未登录：${detail || "请让用户重新扫码"}`
         : `登录失败（exit ${session.exitCode}）：${detail}`
     );
+  }
+  if (session.official) {
+    return [
+      {
+        type: "text",
+        text: JSON.stringify(payload(session, "waiting_authorization", {
+          message: "仍在等待浏览器授权。完成后再次调用 login_status。",
+        })),
+      },
+    ];
   }
   return withQr(
     session,
