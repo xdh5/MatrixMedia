@@ -186,6 +186,134 @@ async function clickDyPublish(page, isDraftMode) {
   );
 }
 
+// 点击发布后必须看到平台确认。只点到按钮并等待数秒不能当作发布成功。
+async function waitForDyImmediatePublish(page) {
+  const deadline = Date.now() + 60 * 1000;
+  let lastSnapshot = null;
+  while (Date.now() < deadline) {
+    const snapshot = await page.evaluate(() => {
+      const norm = (text) => String(text || "").replace(/\s+/g, " ").trim();
+      const visible = (node) => {
+        if (!node || !node.isConnected) return false;
+        const style = window.getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+      };
+      const roots = Array.from(document.querySelectorAll(
+        ".semi-toast, .semi-toast-content, .semi-notification, .semi-modal, .semi-banner, [role='alert'], [role='dialog']"
+      ));
+      const texts = [];
+      for (const root of roots) {
+        if (!visible(root)) continue;
+        const text = norm(root.innerText || root.textContent);
+        if (text && text.length <= 160) texts.push(text);
+      }
+      return { url: location.href, texts };
+    }).catch((error) => ({
+      url: "",
+      texts: [],
+      inspectError: error && error.message ? error.message : String(error),
+    }));
+    lastSnapshot = snapshot;
+    const url = String(snapshot.url || "");
+    const joined = (snapshot.texts || []).join(" | ");
+    const stillOnPublishPage = /\/content\/post\/video(?:[/?#]|$)/.test(url);
+    const loginPage = /\/login|passport/i.test(url);
+    if (url && !stillOnPublishPage && !loginPage) {
+      console.log(`[dy] 平台已离开发布页：${url}`);
+      return;
+    }
+    if (/发布成功|提交成功|发布完成|作品已发布|已成功发布/.test(joined)) {
+      console.log(`[dy] 平台确认发布成功：${joined.slice(0, 300)}`);
+      return;
+    }
+    if (/发布失败|提交失败|上传失败|请重试|无法发布|不能发布/.test(joined)) {
+      throw new Error(`抖音平台拒绝发布：${joined.slice(0, 300)}`);
+    }
+    console.log(`[dy][publish-wait] ${JSON.stringify({ url, texts: snapshot.texts })}`);
+    await page.waitForTimeout(2000);
+  }
+  throw new Error(`点击发布后未收到抖音成功确认：${JSON.stringify(lastSnapshot || {})}`);
+}
+
+function readDyTitleValue() {
+  const root = document.querySelector(".semi-input");
+  const input =
+    root && root.matches("input,textarea")
+      ? root
+      : root && root.querySelector("input,textarea");
+  return input ? String(input.value || "") : "";
+}
+
+async function fillDyTitle(page, title) {
+  const expected = String(title || "");
+  if (!expected) {
+    throw new Error("抖音标题为空");
+  }
+  // 上传后平台会异步把文件名写进标题框。等它落定再清空，避免写完后又被接上一次。
+  await page
+    .waitForFunction(
+      () => {
+        const root = document.querySelector(".semi-input");
+        const input =
+          root && root.matches("input,textarea")
+            ? root
+            : root && root.querySelector("input,textarea");
+        return Boolean(input && String(input.value || "").trim());
+      },
+      { timeout: 8000 }
+    )
+    .catch(() => {});
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const input = await page.$(".semi-input");
+    if (!input) {
+      throw new Error("未找到抖音标题输入框");
+    }
+    await input.click();
+    await page.keyboard.down("Control");
+    await page.keyboard.press("KeyA");
+    await page.keyboard.up("Control");
+    await page.keyboard.press("Backspace");
+    await page.evaluate(() => {
+      const root = document.querySelector(".semi-input");
+      const input =
+        root && root.matches("input,textarea")
+          ? root
+          : root && root.querySelector("input,textarea");
+      if (!input) return;
+      input.focus();
+      const proto =
+        input instanceof HTMLTextAreaElement
+          ? HTMLTextAreaElement.prototype
+          : HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+      setter?.call(input, "");
+      input.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          inputType: "deleteContentBackward",
+          data: null,
+        })
+      );
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const residue = await page.evaluate(readDyTitleValue);
+    if (residue) {
+      console.log(`[dy] 标题框第 ${attempt} 次清空后仍有残留：${residue}`);
+    }
+    await page.type(".semi-input", expected, { delay: 50 });
+    await page.waitForTimeout(300);
+    const written = await page.evaluate(readDyTitleValue);
+    if (written === expected) {
+      console.log(`[dy] 标题已写入：${written}`);
+      return;
+    }
+    console.log(`[dy] 标题与预期不一致，期望「${expected}」，实际「${written}」`);
+  }
+  throw new Error(`抖音标题被重复写入或未能清空：${expected}`);
+}
+
 export default async function (page, data, window, event) {
   const isDraftMode =
     data.publishMode === "draft" || data.publishToDraft === true;
@@ -206,12 +334,7 @@ export default async function (page, data, window, event) {
     await page.waitForSelector(".semi-input", {
       timeout: WAIT_SELECTOR_APPEAR_MS,
     });
-    // 获取元素句柄
-    const input = await page.$(".semi-input");
-    // 点击并清空内容
-    await input.click({ clickCount: 3 }); // 三击全选
-    await page.keyboard.press("Backspace"); // 删除内容
-    await page.type(".semi-input", data.data.bt1, { delay: 50 });
+    await fillDyTitle(page, data.data.bt1);
 
     const input2 = await page.$(".zone-container.editor-kit-container");
     await input2.click(); // 三击全选
@@ -226,6 +349,7 @@ export default async function (page, data, window, event) {
     await page.keyboard.press("Space");
   } catch (e) {
     console.error("❌ 输入标题失败", e);
+    throw e;
   }
 
   try {
@@ -313,22 +437,23 @@ export default async function (page, data, window, event) {
         ? "✅ 抖音视频已保存草稿"
         : isOfficialSchedule
           ? `✅ 抖音视频已由平台预约到 ${data.publishAt}`
-          : "✅ 抖音视频上传成功"
+          : "✅ 抖音视频已触发发布"
     );
-    setTimeout(() => {
-      event.reply("puppeteerFile-done", {
-        ...data,
-        status: true,
-        scheduled: isOfficialSchedule,
-        officialScheduled: isOfficialSchedule,
-        message: isDraftMode
-          ? "保存草稿成功"
-          : isOfficialSchedule
-            ? `抖音官方定时发布已预约: ${data.publishAt}`
-            : "上传成功",
-      });
-      maybeClosePublishWindow(data, window);
-    }, 5000);
+    if (!isDraftMode && !isOfficialSchedule) {
+      await waitForDyImmediatePublish(page);
+    }
+    event.reply("puppeteerFile-done", {
+      ...data,
+      status: true,
+      scheduled: isOfficialSchedule,
+      officialScheduled: isOfficialSchedule,
+      message: isDraftMode
+        ? "保存草稿成功"
+        : isOfficialSchedule
+          ? `抖音官方定时发布已预约: ${data.publishAt}`
+          : "发布成功",
+    });
+    maybeClosePublishWindow(data, window);
   } catch (e) {
     const detail = (e && e.message) || String(e);
     event.reply("puppeteerFile-done", {

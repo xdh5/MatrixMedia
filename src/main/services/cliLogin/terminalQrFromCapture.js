@@ -235,7 +235,8 @@ export async function getDouyinLoginCaptureRectFromPuppeteerPage(page) {
  * @param {{ partitionLabel: string, saveQrPngPath?: string | null }} opts
  */
 export async function paintLoginQrToTerminalFromPuppeteerPage(page, opts) {
-  if (!process.stdout.isTTY) {
+  // MCP 启动时 stdout 不是终端，但仍要把二维码写成 --save-qr-png。
+  if (!process.stdout.isTTY && !opts.saveQrPngPath) {
     return;
   }
   try {
@@ -323,8 +324,10 @@ export async function paintLoginQrToTerminalFromPuppeteerPage(page, opts) {
     }
   }
 
-  await writeDouyinLoginQrToStdout(image, {
-    partitionLabel: opts.partitionLabel,
-    srcHint: fromBase64 ? "（页面 base64 栅格）" : "（CDP 截图栅格）",
-  });
+  if (process.stdout.isTTY) {
+    await writeDouyinLoginQrToStdout(image, {
+      partitionLabel: opts.partitionLabel,
+      srcHint: fromBase64 ? "（页面 base64 栅格）" : "（CDP 截图栅格）",
+    });
+  }
 }

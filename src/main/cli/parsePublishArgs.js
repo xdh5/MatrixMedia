@@ -190,13 +190,14 @@ export function parsePublishArgs(subArgv) {
   }
   // in dir mode title comes from xlsx per row, no global --title needed
 
-  if (out.show && out.platform !== "视频号") {
+  const visibleDebugPlatforms = new Set(["视频号", "抖音"]);
+  if (out.show && !visibleDebugPlatforms.has(out.platform)) {
     console.warn(
-      "MatrixMedia: 当前仅视频号 CLI publish 支持显示浏览器窗口，已忽略 --show。"
+      "MatrixMedia: 当前仅视频号和抖音 CLI publish 支持显示浏览器窗口，已忽略 --show。"
     );
     out.show = false;
   }
-  if (out.show && out.platform === "视频号") {
+  if (out.show && visibleDebugPlatforms.has(out.platform)) {
     // 可见模式用于排查平台二次确认和校验提示，任务结束后保留现场。
     out.closeWindowAfterPublish = false;
   }

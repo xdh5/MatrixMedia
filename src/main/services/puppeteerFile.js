@@ -251,7 +251,7 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
   data = applyXhsConservativePublishOptions(data);
   data.partition = data.partition.split("-")[0];
   const isXhsTask = isXhsPlatform(data.pt);
-  const maxRetries = getPublishAttemptLimit(data, 5);
+  const maxRetries = data.show ? 1 : getPublishAttemptLimit(data, 5);
   let currentAttempt = 0;
   let finished = false;
   let activeBrowser = null;
@@ -979,7 +979,7 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
               status: false,
               message: (failurePayload && failurePayload.message) || "执行失败",
             });
-            if (!isXhsTask && win && !win.isDestroyed())
+            if (!isXhsTask && !data.show && win && !win.isDestroyed())
               closePublishWinProgrammatically(win);
             finishOnce();
             return;

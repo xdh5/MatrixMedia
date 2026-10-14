@@ -100,7 +100,7 @@ export function parseLoginArgs(subArgv) {
     out.partition = `persist:${phoneSeg}${out.platform}`
   }
 
-  if (out.show && out.platform !== '视频号') {
+  if (out.show && out.platform !== '视频号' && out.platform !== '抖音') {
     console.warn('MatrixMedia: CLI 模式不打开登录窗口，已忽略 --show。')
     out.show = false
   }

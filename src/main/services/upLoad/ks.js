@@ -289,6 +289,56 @@ async function selectKsCreativeStatement(page, data) {
   console.log("[ks] 已选择声明:", label);
 }
 
+// 点击发布后必须看到平台确认。只点到按钮并等待数秒不能当作发布成功。
+async function waitForKsImmediatePublish(page) {
+  const deadline = Date.now() + 60 * 1000;
+  let lastSnapshot = null;
+  while (Date.now() < deadline) {
+    const snapshot = await page.evaluate(() => {
+      const norm = (text) => String(text || "").replace(/\s+/g, " ").trim();
+      const visible = (node) => {
+        if (!node || !node.isConnected) return false;
+        const style = window.getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+      };
+      const roots = Array.from(document.querySelectorAll(
+        ".ant-message, .ant-message-notice, .ant-notification, .ant-modal, [role='alert'], [role='dialog']"
+      ));
+      const texts = [];
+      for (const root of roots) {
+        if (!visible(root)) continue;
+        const text = norm(root.innerText || root.textContent);
+        if (text && text.length <= 160) texts.push(text);
+      }
+      return { url: location.href, texts };
+    }).catch((error) => ({
+      url: "",
+      texts: [],
+      inspectError: error && error.message ? error.message : String(error),
+    }));
+    lastSnapshot = snapshot;
+    const url = String(snapshot.url || "");
+    const joined = (snapshot.texts || []).join(" | ");
+    const stillOnPublishPage = /\/article\/publish\/video(?:[/?#]|$)/.test(url);
+    const loginPage = /\/login|passport/i.test(url);
+    if (url && !stillOnPublishPage && !loginPage) {
+      console.log(`[ks] 平台已离开发布页：${url}`);
+      return;
+    }
+    if (/发布成功|提交成功|发布完成|作品已发布|已成功发布/.test(joined)) {
+      console.log(`[ks] 平台确认发布成功：${joined.slice(0, 300)}`);
+      return;
+    }
+    if (/发布失败|提交失败|上传失败|请重试|无法发布|不能发布/.test(joined)) {
+      throw new Error(`快手平台拒绝发布：${joined.slice(0, 300)}`);
+    }
+    console.log(`[ks][publish-wait] ${JSON.stringify({ url, texts: snapshot.texts })}`);
+    await page.waitForTimeout(2000);
+  }
+  throw new Error(`点击发布后未收到快手成功确认：${JSON.stringify(lastSnapshot || {})}`);
+}
+
 export default async function (page, data, window,event) {
   const isDraftMode = data.publishMode === "draft" || data.publishToDraft === true;
   const submitText = isDraftMode ? "取消" : "发布";
@@ -398,20 +448,21 @@ export default async function (page, data, window,event) {
       await waitForOfficialScheduleAccepted(page, "快手", previousUrl);
     }
     console.log(isDraftMode ? `✅ 快手视频已保存草稿，click via=${clicked.via}` : `✅ 快手视频已触发发布，click via=${clicked.via}`);
-    setTimeout(() => {
-      event.reply("puppeteerFile-done", {
-        ...data,
-        status: true,
-        scheduled: isOfficialSchedule,
-        officialScheduled: isOfficialSchedule,
-        message: isDraftMode
-          ? "保存草稿成功"
-          : isOfficialSchedule
-            ? `快手官方定时发布已预约: ${data.publishAt}`
-            : "上传成功",
-      });
-      maybeClosePublishWindow(data, window);
-    }, 5000);
+    if (!isDraftMode && !isOfficialSchedule) {
+      await waitForKsImmediatePublish(page);
+    }
+    event.reply("puppeteerFile-done", {
+      ...data,
+      status: true,
+      scheduled: isOfficialSchedule,
+      officialScheduled: isOfficialSchedule,
+      message: isDraftMode
+        ? "保存草稿成功"
+        : isOfficialSchedule
+          ? `快手官方定时发布已预约: ${data.publishAt}`
+          : "发布成功",
+    });
+    maybeClosePublishWindow(data, window);
   } catch (e) {
     const detail = (e && e.message) || String(e);
     event.reply("puppeteerFile-done", {

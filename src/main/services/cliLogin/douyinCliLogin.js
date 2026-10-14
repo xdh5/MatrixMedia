@@ -161,7 +161,7 @@ export async function runDouyinCliLogin({
         show: visibleWin,
         paintWhenInitiallyHidden: true,
         autoHideMenuBar: true,
-        skipTaskbar: true,
+        skipTaskbar: !visibleWin,
         focusable: visibleWin,
         hasShadow: false,
         webPreferences: {
