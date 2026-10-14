@@ -168,7 +168,7 @@ Cookie 保存在 MatrixMedia 目录的 data 中。当前支持抖音、视频号
   xvfb-run -a ./矩媒.AppImage cli login -p dy --phone 13800138000
   electron . cli login -p dy --phone 13800138000 --puppeteer-headless
   矩媒.exe cli login -p dy --phone 13800138000
-  矩媒.exe cli login -p ks --phone 心灵鸡汤 --save-qr-png kuaishou-login.png
-  矩媒.exe cli login -p tt --phone 心灵鸡汤 --save-qr-png toutiao-login.png
+  矩媒.exe cli login -p ks --phone finance --save-qr-png kuaishou-login.png
+  矩媒.exe cli login -p tt --phone finance --save-qr-png toutiao-login.png
 `.trim()
 }

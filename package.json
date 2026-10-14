@@ -6,13 +6,8 @@
   "license": "GPL-2.0-only",
   "main": "./dist/electron/main.js",
   "scripts": {
-    "dev": "cross-env TERGET_ENV=development node .electron-vue/dev-runner.js",
-    "predev": "node scripts/gen-telemetry-secret.js",
-    "build:dir": "cross-env BUILD_TARGET=clean node .electron-vue/build.js",
-    "prebuild:dir": "node scripts/gen-telemetry-secret.js",
-    "test:main-process-log-file": "node scripts/test-main-process-log-file.js",
-    "test:cli-login": "node scripts/test-cli-login.js",
-    "test:puppeteer-cancel": "node scripts/test-puppeteer-cancel.js"
+    "dev": "node .electron-vue/dev-runner.js",
+    "build:dir": "cross-env BUILD_TARGET=clean node .electron-vue/build.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
@@ -59,7 +54,6 @@
     "cross-env": "^7.0.3",
     "date-fns": "^2.30.0",
     "del": "^6.1.1",
-    "dotenv": "^16.1.4",
     "electron": "^24.8.5",
     "esbuild-loader": "^3.0.1",
     "eslint": "^7.32.0",
@@ -72,7 +66,6 @@
     "eslint-webpack-plugin": "^3.2.0",
     "extract-zip": "^2.0.1",
     "listr2": "^5.0.7",
-    "minimist": "^1.2.8",
     "node-loader": "^2.0.0",
     "portfinder": "^1.0.32",
     "terser-webpack-plugin": "^5.3.9",

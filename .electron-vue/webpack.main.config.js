@@ -7,7 +7,12 @@ const { dependencies } = require('../package.json')
 const webpack = require('webpack')
 const TerserPlugin = require('terser-webpack-plugin')
 const config = require('../config')
-const { getConfig } = require("./utils")
+
+const userConfig = {
+  NODE_ENV: "development",
+  URL_SIGNATURE: "true",
+  TERGET_ENV: "development",
+}
 
 function resolve(dir) {
   return path.join(__dirname, '..', dir)
@@ -48,7 +53,7 @@ let mainConfig = {
   },
   plugins: [
     new webpack.DefinePlugin({
-      'process.env.userConfig':JSON.stringify(getConfig)
+      'process.env.userConfig': JSON.stringify(userConfig)
     })
   ],
   resolve: {

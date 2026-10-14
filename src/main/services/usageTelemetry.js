@@ -6,7 +6,7 @@
  * 设计：
  * - 每次 Electron 启动（GUI / CLI）追加一条事件到公开 Gist 的 events.json
  * - 不做去重、不固定设备 ID，只记录"打开"这一动作
- * - 写入需要 token：env MATRIXMEDIA_GIST_TOKEN / ~/.matrixmedia/gist-token / 内置常量
+ * - 写入需要 token：env MATRIXMEDIA_GIST_TOKEN 或 ~/.matrixmedia/gist-token
  * - 关闭：env MATRIXMEDIA_DISABLE_TELEMETRY=1 或 ~/.matrixmedia/no-telemetry
  * - best-effort，失败静默，不影响应用启动
  */
@@ -15,12 +15,6 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import https from "https";
-// 构建期由 scripts/gen-telemetry-secret.js 生成（gitignored，不进仓库）
-// 导出 GIST_ID / GIST_TOKEN 两个常量；缺失时为空字符串
-import {
-  GIST_ID as GEN_GIST_ID,
-  GIST_TOKEN as GEN_GIST_TOKEN,
-} from "./telemetrySecret.generated";
 
 const GITHUB_API = "https://api.github.com";
 const GIST_FILENAME = "events.json";
@@ -28,10 +22,6 @@ const MAX_EVENTS = 5000; // 最多保留最近 5000 条，避免无限增长
 const NO_TELEMETRY_FILE = "no-telemetry";
 const TOKEN_FILE = "gist-token";
 const CONFIG_DIR = ".matrixmedia";
-
-// 内置默认值（由构建期注入；token 不进 git 历史，避免触发 GitHub Push Protection）
-const BUILTIN_GIST_ID = GEN_GIST_ID || "";
-const BUILTIN_GIST_TOKEN = GEN_GIST_TOKEN || "";
 
 function readEnv(name) {
   const v = process.env[name];
@@ -51,14 +41,13 @@ function readConfigFile(name) {
 }
 
 export function getGistId() {
-  return readEnv("MATRIXMEDIA_GIST_ID") || BUILTIN_GIST_ID;
+  return readEnv("MATRIXMEDIA_GIST_ID");
 }
 
 export function getGistToken() {
   return (
     readEnv("MATRIXMEDIA_GIST_TOKEN") ||
-    readConfigFile(TOKEN_FILE) ||
-    BUILTIN_GIST_TOKEN
+    readConfigFile(TOKEN_FILE)
   );
 }
 
