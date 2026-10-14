@@ -517,9 +517,8 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
         reusablePublishSessions.delete(data.reuseSessionKey);
       } else {
         browser = await pie.connect(app, puppeteer);
-        const showSphWindow = String(data.pt || "").includes("视频");
         win = new BrowserWindow({
-        show: isXhsTask || showSphWindow
+        show: isXhsTask
           ? true
           : data.mmCliSuppressWindow
           ? false
@@ -527,8 +526,7 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
         width: data?.width ?? 1300,
         height: data?.height ?? 800,
         title: `${data.partition} (尝试${currentAttempt}/${maxRetries})`,
-        // 隐藏窗口默认不绘制且会被节流，视频号要先在本地 <video> 解码取时长才会真正上传，
-        // 不加这两项会一直停在 readyState 0，页面永远不出现「删除」标签。
+        // 后台发布保持页面绘制，并关闭后台节流。
         paintWhenInitiallyHidden: true,
         webPreferences: {
           partition: data.partition,

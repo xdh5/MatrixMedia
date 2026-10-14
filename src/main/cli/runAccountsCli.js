@@ -6,6 +6,7 @@ import { app, session } from "electron";
 import ptConfig from "../config/ptConfig";
 import { writeCliJson, writeCliStdout } from "./cliStdout";
 import { runOfficialPython } from "../services/officialPython";
+import { accountGroupFromArgv } from "../services/matrixDataPaths";
 
 const LOGIN_COOKIE_RULE = {
   抖音: c => c.name === "passport_assist_user" && !!c.value,
@@ -23,8 +24,9 @@ function getAccountsDir() {
 
 function readAccounts() {
   const dir = getAccountsDir();
-  if (!fs.existsSync(dir)) return [];
-  const files = fs.readdirSync(dir).filter(f => f.endsWith(".json"));
+  const files = fs.existsSync(dir)
+    ? fs.readdirSync(dir).filter(f => f.endsWith(".json"))
+    : [];
   const seen = new Map();
   for (const f of files) {
     let list;
@@ -40,6 +42,27 @@ function readAccounts() {
       const prev = seen.get(key);
       if (!prev || (item.createTime || 0) > (prev.createTime || 0)) {
         seen.set(key, item);
+      }
+    }
+  }
+  // 命令行登录只保存会话分区；直接发现当前账号组的分区，无需账号树记录。
+  const group = accountGroupFromArgv();
+  const partitionsDir = path.join(app.getPath("sessionData"), "Partitions");
+  if (group && fs.existsSync(partitionsDir)) {
+    for (const entry of fs.readdirSync(partitionsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      let partitionName;
+      try {
+        partitionName = decodeURIComponent(entry.name);
+      } catch {
+        continue;
+      }
+      if (!partitionName.startsWith(group)) continue;
+      const pt = partitionName.slice(group.length);
+      if (!LOGIN_COOKIE_RULE[pt]) continue;
+      const key = `${group}__${pt}`;
+      if (!seen.has(key)) {
+        seen.set(key, { phone: group, pt, partition: `persist:${partitionName}` });
       }
     }
   }
