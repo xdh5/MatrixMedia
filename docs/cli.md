@@ -1,8 +1,8 @@
 ## 命令行（CLI）说明
 
-在保留图形界面的前提下，同一可执行文件支持 CLI 子命令。入口为参数中出现 `cli`。
+命令行是唯一入口。参数中出现 `cli` 即进入命令行模式。
 
-> 返回 [README](../README.md) · 相关：[HTTP API](./http-api.md) · [MCP](./mcp.md)
+> 返回 [README](../README.md) · 相关：[MCP](./mcp.md)
 
 ## 故障排除
 
@@ -16,12 +16,12 @@ ELECTRON_RUN_AS_NODE= electron . cli publish --help
 
 ## CLI 登录
 
-与 GUI `getCookie` / `LocalVideoPublish` 对齐的最小闭环，当前支持**抖音**和**视频号**两个平台。
+当前支持**抖音**和**视频号**两个平台。
 
 ### 通用机制
 
 1. **会话**：`partition` 形如 `persist:<手机号段><平台名>`，与账号树、webview 一致。
-2. **Cookie 持久化**：登录成功后自动 `cookies.flushStore()` + `flushStorageData()`，确保 CLI 与 GUI 共用同一 `userData` 下的 `persist:` 分区。
+2. **Cookie 持久化**：登录成功后自动 `cookies.flushStore()` + `flushStorageData()`，Cookie 写在 MatrixMedia 目录的 `data` 下。
 3. **终端扫码**：CLI 自动捕获二维码并在终端展示，用户扫码后继续轮询登录 Cookie。
 4. **退出**：检测到 Cookie 后关窗；超时 / 用户关窗返回码 3。
 
@@ -64,18 +64,15 @@ xvfb-run -a ./矩媒.AppImage cli login -p dy --phone 13800138000
 ## 发布视频
 
 ```bash
-# 开发（项目根目录，需先 yarn dev 或已 build:dir）
+# 开发（项目根目录，需已执行 yarn build:dir）
 electron . cli publish -p dy --phone 13800138000 -f /path/to/video.mp4 -t "标题"
-
-# Windows 安装包产物
-"矩媒.exe" cli publish -p dy --phone 13800138000 -f C:\video.mp4 -t "标题"
 ```
 
 ### 参数摘要
 
-与界面 **本地视频发布**（`LocalVideoPublish.vue` → `buildVideoPayload` / `handleBatchPublish`）同一套字段：
+与发布载荷同一套字段：
 
-| 参数                      | 对应 GUI / 载荷字段                                                        |
+| 参数                      | 载荷字段                                                                   |
 | ------------------------- | -------------------------------------------------------------------------- |
 | `-p` / `--platform`       | 发布平台                                                                   |
 | `-f` / `--file`           | 本地视频路径 → `filePath`、`data.textOtherName`（文件名无扩展名）          |
@@ -87,7 +84,7 @@ electron . cli publish -p dy --phone 13800138000 -f /path/to/video.mp4 -t "标�
 | `--address`               | **地址** → `data.address`（仅百家号）                                      |
 | `--publish-at`            | 一次性定时发布，格式 `YYYY-MM-DD HH:mm:ss`；抖音、快手、视频号、百家号、头条使用平台官方定时，其他平台使用矩媒本地调度 |
 | `--show`                  | 当前 CLI 会忽略，仍后台运行                                                |
-| `--no-close-window`       | CLI 下无效，仅与 GUI 显示窗口场景有关                                      |
+| `--no-close-window`       | 发布后不自动关窗                                                           |
 | `--draft`                 | 保存到平台草稿箱，不直接发布                                               |
 | `--sph-product-id`        | 视频号商品上架快捷参数（商品编号）；其他平台忽略                           |
 | `--sph-link-type`         | 视频号链接类型，当前支持 `none` / `product`；其他平台忽略                  |
@@ -121,42 +118,13 @@ electron . cli publish -p sph --phone 13800138000 -f /path/to/video.mp4 \
 
 ### 注意事项
 
-1. **登录态**：CLI 与 GUI 共用同一 `partition` 会话（`userData` 固定为 `matrix-video`）。抖音和视频号可使用 **`cli login`** 在终端完成扫码登录；其它平台可先在 GUI 登录，或保证该 `partition` 已有有效 Cookie。
-2. **与 GUI 同时运行**：CLI 模式不会申请单实例锁；若与 GUI 同时使用同一账号 partition，可能导致会话冲突，建议错峰使用。
-3. **进程生命周期**：CLI 仍会启动一个 Electron 主进程，只是不显示 GUI。命令完成、参数失败或业务失败后会主动退出；执行发布期间进程存在属于正常现象。
-4. **启动诊断**：终端会依次输出 Puppeteer 初始化、Electron ready、CLI 参数识别和最终退出码。初始化超过 15 秒会以退出码 `1` 结束并打印明确错误，不会无限静默等待。
-5. **登录失效**：视频号发布页若跳转到 `channels.weixin.qq.com/login.html`，CLI 会立即提示重新登录并以退出码 `3` 结束，不再按普通 URL 不匹配重复重试。
-6. **官方预约发布**：`--publish-at "YYYY-MM-DD HH:mm:ss"` 只支持抖音、快手、视频号、百家号和头条。矩媒会立即上传，并在平台后台确认官方预约成功后返回；其他平台直接报错，不再创建应用内定时任务。
-7. **Linux 打包**：使用 `yarn build:linux` 生成 AppImage（需在本机构建环境安装相应依赖）。
+1. **登录态**：Cookie 保存在 MatrixMedia 目录的 `data` 中。抖音、快手、头条和视频号使用 `cli login` 扫码登录。
+2. **进程生命周期**：命令会启动 Electron 主进程，不打开图形界面。命令完成、参数失败或业务失败后会主动退出；执行发布期间进程存在属于正常现象。
+3. **启动诊断**：终端会依次输出 Puppeteer 初始化、Electron ready、CLI 参数识别和最终退出码。初始化超过 15 秒会以退出码 `1` 结束并打印明确错误，不会无限静默等待。
+4. **登录失效**：视频号发布页若跳转到 `channels.weixin.qq.com/login.html`，CLI 会立即提示重新登录并以退出码 `3` 结束，不再按普通 URL 不匹配重复重试。
+5. **官方预约发布**：`--publish-at "YYYY-MM-DD HH:mm:ss"` 只支持抖音、快手、视频号、百家号和头条。矩媒会立即上传，并在平台后台确认官方预约成功后返回；其他平台直接报错，不再创建应用内定时任务。
+6. **编译**：在项目根目录执行 `yarn build:dir` 编译命令行主进程。
 
-## 发布掘金文章
+## 编译
 
-掘金文章发布复用 GUI 中已登录的掘金账号会话，`--phone` / `--partition` 需要与界面里的掘金账号一致。正文可以直接传入 `--content`，也可以通过 `--file` / `-f` 读取本地 `.md` / `.txt` 文件；至少提供一个，同时提供时优先使用 `--content`。
-
-```bash
-electron . cli publish-article -p juejin --phone 13800138000 -t "文章标题" --file ./post.md
-electron . cli publish-article -p juejin --phone 13800138000 -t "文章标题" --content "正文内容" --tags "前端 electron"
-electron . cli publish-article -p juejin --phone 13800138000 -t "文章标题" --file ./post.md --publish-at "2026-05-13 10:00:00"
-```
-
-### 参数摘要
-
-| 参数                      | 说明                                                                                 |
-| ------------------------- | ------------------------------------------------------------------------------------ |
-| `-p` / `--platform`       | 发布平台，当前支持 `juejin` / `jj` / `掘金`                                          |
-| `--phone` / `--partition` | 会话分区，与 GUI 掘金账号一致                                                        |
-| `-t` / `--title`          | 文章标题                                                                             |
-| `--content`               | 文章正文，至少与 `--file` / `-f` 提供一个；同时提供时优先使用 `--content`            |
-| `-f` / `--file`           | `.md` / `.txt` 正文文件，至少与 `--content` 提供一个；同时提供时优先使用 `--content` |
-| `--cover`                 | 可选封面图片                                                                         |
-| `--category`              | 分类，默认“前端”                                                                     |
-| `--tags`                  | 空格分隔标签，默认“前端 electron”                                                    |
-| `--summary`               | 可选摘要，不传则由掘金自动生成                                                       |
-| `--publish-at`            | 一次性定时发布，格式 `YYYY-MM-DD HH:mm:ss`                                           |
-
-## 构建命令
-
-- `yarn build`：Windows x64 NSIS
-- `yarn build:mac`：macOS dmg（x64 + arm64）
-- `yarn build:linux`：Linux AppImage
-- `yarn build:all`：Windows + Linux + macOS
+- `yarn build:dir`：编译命令行主进程到 `dist/electron/main.js`

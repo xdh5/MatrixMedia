@@ -10,12 +10,8 @@ module.exports = {
   },
   extends: 'standard',
   globals: {
-    __static: true,
     __lib: true
   },
-  plugins: [
-    'html'
-  ],
   'rules': {
     // allow paren-less arrow functions
     'arrow-parens': 0,

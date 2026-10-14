@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * 与渲染层 `src/renderer/utils/configUrl.js` 保持一致，供主进程 CLI 使用
+ * 各平台页面地址，供命令行登录和发布使用。
  */
 export default {
   抖音: {
@@ -54,19 +54,5 @@ export default {
     useragent:
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
     listIndex: "https://creator.xiaohongshu.com/new/note-manager",
-  },
-  掘金: {
-    index: "https://juejin.cn/login",
-    upload: "https://juejin.cn/editor/drafts/new",
-    useragent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-    listIndex: "https://juejin.cn/creator/content/article/essays?status=published",
-  },
-  番茄视频: {
-    index: "https://pugc.yueduwuxian.com/fqvideo/login",
-    upload: "https://pugc.yueduwuxian.com/fqvideo/home/publish-video",
-    useragent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-    listIndex: "https://pugc.yueduwuxian.com/fqvideo/home/video-list",
   },
 };

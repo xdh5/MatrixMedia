@@ -97,24 +97,7 @@ matrixmedia cli accounts --json > /tmp/mm-accounts.json
 
 Each row: `{ phone, pt, partition, loggedIn, reason, expireAt, createdAt }`.
 
-## Example 6: Review recent publish failures
-
-User intent: 这周抖音发布失败的都是啥。
-
-```bash
-matrixmedia cli history -p dy -s failed -d 7
-```
-
-## Example 7: Explicit date range + machine output
-
-```bash
-matrixmedia cli history \
-  --since 2026-04-01 \
-  --until 2026-04-18 \
-  --json > /tmp/mm-april-history.json
-```
-
-## Example 8: 视频号 — 短标 + 空格分隔标签（最典型）
+## Example 6: 视频号 — 短标 + 空格分隔标签（最典型）
 
 User intent: 发布视频号视频，长标题 + 单独短标 + 3 个标签。
 
@@ -135,7 +118,7 @@ Why it matters:
 - Tags use **single space** 分隔。
 - 不传 `--bt2` 会触发 warn 并回退到 `--title`，基本必翻车。
 
-## Example 9: 抖音 — hashtag 风格标签
+## Example 7: 抖音 — hashtag 风格标签
 
 抖音把 `bq` 拼在 `bt2` 之后作为描述。想做 hashtag 显式加 `#`：
 
@@ -149,7 +132,7 @@ matrixmedia cli publish \
   --tags "#跑步 #减脂 #新手"
 ```
 
-## Example 10: 哔哩哔哩 — 独立标签控件
+## Example 8: 哔哩哔哩 — 独立标签控件
 
 bilibili 的标签是独立输入 + 回车的控件，前导 `#` 会被剥掉，直接写词：
 
@@ -162,7 +145,7 @@ matrixmedia cli publish \
   --tags "游戏 解说 开黑"
 ```
 
-## Example 11: 百家号 — tags 会被忽略
+## Example 9: 百家号 — tags 会被忽略
 
 当前 `upLoad/bjh.js` 没有写入 tag 逻辑；不要在这里浪费时间编标签，写好标题 + 地址即可：
 
@@ -175,7 +158,7 @@ matrixmedia cli publish \
   --address "北京市朝阳区三里屯"
 ```
 
-## Example 12: Pre-publish preflight (Douyin)
+## Example 10: Pre-publish preflight (Douyin)
 
 User intent: 发布前顺手核一次登录态。
 
@@ -192,12 +175,9 @@ matrixmedia cli publish \
   --phone 13800138000 \
   -f "/Users/me/videos/demo.mp4" \
   -t "今日发布"
-
-# 4) 回查最近一条记录
-matrixmedia cli history --phone 13800138000 -p dy -n 1
 ```
 
-## Example 13: Pre-publish preflight (视频号)
+## Example 11: Pre-publish preflight (视频号)
 
 User intent: 视频号发布前检查并登录。
 
@@ -216,7 +196,4 @@ matrixmedia cli publish \
   -t "视频号发布测试" \
   --bt2 "发布测试" \
   --tags "#测试 #矩媒"
-
-# 4) 回查最近一条记录
-matrixmedia cli history --phone 13800138000 -p sph -n 1
 ```

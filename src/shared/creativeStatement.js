@@ -239,8 +239,7 @@ export function resolveSphCreativeStatementLabel(value) {
 }
 
 /**
- * 按平台解析创作声明（与 LocalVideoPublish.applyBatchCreativeStatement 一致：
- * 当前值在该平台无对应选项时回退为 none）
+ * 按平台解析创作声明。批量设置可被单账号覆盖；当前值在该平台无对应选项时回退为 none。
  * @param {string} value
  * @param {string} pt 平台中文名，如「抖音」「哔哩哔哩」
  */

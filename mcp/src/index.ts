@@ -5,8 +5,6 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { listAccountsTool, handleListAccounts } from './tools/accounts.js';
-import { listHistoryTool, handleListHistory } from './tools/history.js';
-import { publishArticleTool, handlePublishArticle } from './tools/publishArticle.js';
 import { publishVideoTool, handlePublishVideo } from './tools/publish.js';
 import {
   loginTool,
@@ -25,11 +23,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       listAccountsTool,
-      listHistoryTool,
       loginTool,
       loginStatusTool,
       publishVideoTool,
-      publishArticleTool,
     ],
   };
 });
@@ -42,9 +38,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     switch (name) {
       case 'list_accounts':
         content = [{ type: 'text', text: await handleListAccounts(args) }];
-        break;
-      case 'list_history':
-        content = [{ type: 'text', text: await handleListHistory(args) }];
         break;
       case 'login':
         content = await handleLogin(args);
@@ -69,9 +62,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }];
         break;
       }
-      case 'publish_article':
-        content = [{ type: 'text', text: await handlePublishArticle(args) }];
-        break;
       default:
         throw new Error('Unknown tool: ' + name);
     }

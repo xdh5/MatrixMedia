@@ -216,17 +216,17 @@ Good vs bad（哔哩哔哩 / 小红书）：
 - `cli login` supports **Douyin** (`-p dy`) and **视频号** (`-p sph`). Do not attempt `cli login -p tt/ks/blbl/bjh` — the parser rejects it.
 - **Douyin login**: default hidden window + terminal QR; supports `--puppeteer-headless` for true headless mode. `--show` is ignored.
 - **视频号 login**: default transparent window (`opacity: 0`) + terminal QR; supports `--show` to open a visible login window. Does not support `--puppeteer-headless`. UA is injected via CDP `page.setUserAgent()` (WeChat UA) before navigation to cover all iframe requests. Re-login is always supported (detects new `sessionid` different from the old one).
-- For non-Douyin/视频号 platforms: instruct the user to log in once in the GUI; CLI automatically reuses the same `persist:<phone><platform>` session partition for `cli publish` / `cli accounts`.
+- For platforms other than Douyin, Kuaishou, Toutiao, and 视频号: the session partition is `persist:<phone><platform>`. `cli publish` and `cli accounts` reuse that partition.
 - If a publish fails with login/session errors:
   - Douyin → run `cli login -p dy --phone <phone>` first, then retry publish.
   - 视频号 → run `cli login -p sph --phone <phone>` first, then retry publish.
-  - Other platforms → ask the user to re-login in the GUI, then retry `cli publish`.
+  - Other platforms → ask the user to refresh the saved session, then retry `cli publish`.
 - On Linux headless/SSH, prefer `xvfb-run -a` for the login display pipeline.
 - `cli accounts` is non-interactive — it only reads session cookies and never triggers login; use it to pick the right `--phone` / `--partition` before login or publish, and to diagnose expired cookies.
 
 ## Accounts Command
 
-Inspect login state for every account the GUI already knows about:
+Inspect login state for every saved account:
 
 ```bash
 matrixmedia cli accounts [options]
@@ -243,34 +243,14 @@ Rules used per platform (cookie in the persist partition for that site):
 - 百家号 → `BDUSS`
 - 头条 → `odin_tt` (value length > 65)
 - 视频号 → `sessionid`
-- 番茄视频 → `sessionid`
 - 哔哩哔哩 → `SESSDATA`
 - 快手 → `userId`
 
 Expired cookies report `loggedIn: false` with reason `cookie 已过期`.
 
-## History Command
-
-Read the local publish log (`<Documents>/MatrixMedia/data/pushData/YYYY-MM-DD.json`):
-
-```bash
-matrixmedia cli history [options]
-```
-
-Key flags:
-- `-p, --platform <id>`: platform filter.
-- `--phone <id>`: phone filter.
-- `-s, --status <s>`: `success | failed | publishing`（中文同义 `成功 | 失败 | 发布中`）。
-- `-d, --days <n>`: look-back window (default 7).
-- `--since <YYYY-MM-DD>` / `--until <YYYY-MM-DD>`: explicit range; overrides `--days`.
-- `-n, --limit <n>`: cap rows (default 50, sorted by last publish time desc).
-- `--json`: machine-readable output.
-
-Record-status inference: prefer `publishStatus`; fall back to `publishSuccessCount > 0 → success`, `publishFailCount > 0 → failed`, otherwise `publishing`. Attempt column shows `successCount/attemptCount`, matching what GUI 视频管理 renders.
-
 ## Execution Policy For Agents
 
-1. Run `cli <sub> --help` once when flags are uncertain (applies to publish/login/accounts/history).
+1. Run `cli <sub> --help` once when flags are uncertain (applies to publish/login/accounts).
 2. Quote paths that may contain spaces.
 3. Prefer absolute file paths for `--file`.
 4. Before publishing, run `cli accounts -p <platform> --phone <phone>` (or `--logged-out` variant) to confirm the session is still valid — it avoids wasting a 35-minute publish timeout on an expired cookie.
@@ -278,8 +258,7 @@ Record-status inference: prefer `publishStatus`; fall back to `publishSuccessCou
    - `0`: success
    - `2`: argument error, fix arguments and rerun
    - `3`: task failure (often login/session/upload), recover then rerun
-6. When debugging a failed publish, `cli history --phone <phone> -p <platform> -n 5` shows the most recent attempts and the `lastPublishMessage` that GUI displays.
-7. Return a concise result summary: command intent, key args, outcome, next action.
+6. Return a concise result summary: command intent, key args, outcome, next action.
 
 ## Output Template
 

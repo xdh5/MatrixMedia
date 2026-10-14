@@ -9,11 +9,8 @@ const { say } = require('cfonts')
 const { spawn } = require('child_process')
 const config = require('../config')
 const webpack = require('webpack')
-const WebpackDevServer = require('webpack-dev-server')
-const Portfinder = require("portfinder")
 
 const mainConfig = require('./webpack.main.config')
-const rendererConfig = require('./webpack.renderer.config')
 
 let electronProcess = null
 let manualRestart = false
@@ -59,45 +56,6 @@ function removeJunk(chunk) {
 
 
   return chunk;
-}
-
-function startRenderer() {
-  return new Promise((resolve, reject) => {
-    rendererConfig.mode = 'development'
-    Portfinder.basePort = config.dev.port || 9088
-    Portfinder.getPort((err, port) => {
-      if (err) {
-        reject("PortError:" + err)
-      } else {
-        const compiler = webpack(rendererConfig)
-
-        compiler.hooks.done.tap('done', stats => {
-          logStats('Renderer', stats)
-        })
-
-        const server = new WebpackDevServer(
-          {
-            client: {
-              overlay: false, // 关闭全局错误提示
-            },
-            port,
-            static: {
-              directory: path.join(__dirname, '..', 'static'),
-              publicPath: '/static/',
-            }
-          },
-          compiler
-        )
-
-        process.env.PORT = port
-        server.start().then(() => {
-          resolve()
-        })
-
-      }
-    })
-
-  })
 }
 
 function startMain() {
@@ -206,7 +164,6 @@ async function init() {
   greeting()
 
   try {
-    await startRenderer()
     await startMain()
     await startElectron()
   } catch (error) {

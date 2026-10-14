@@ -1,6 +1,6 @@
 "use strict";
 
-/** 平台别名 → 中文 canonical 名（与 GUI 账号树、partition 一致） */
+/** 平台别名 → 中文 canonical 名（与登录分区一致） */
 export const PLATFORM_ALIASES = {
   dy: "抖音",
   douyin: "抖音",
@@ -21,10 +21,6 @@ export const PLATFORM_ALIASES = {
   xhs: "小红书",
   xiaohongshu: "小红书",
   小红书: "小红书",
-  fqsp: "番茄视频",
-  fanqie: "番茄视频",
-  fq: "番茄视频",
-  番茄视频: "番茄视频",
 };
 
 /** HTTP / CLI 视频发布支持的全部平台（canonical 中文名） */
@@ -36,7 +32,6 @@ export const VIDEO_PUBLISH_CANONICAL = [
   "头条",
   "快手",
   "小红书",
-  "番茄视频",
 ];
 
 /** 文档用：每个平台的主推荐 code 与自动化说明 */
@@ -48,13 +43,6 @@ export const VIDEO_PUBLISH_PLATFORM_DOCS = [
   { code: "tt", name: "头条", aliases: ["toutiao", "头条"], automated: true },
   { code: "ks", name: "快手", aliases: ["kuaishou", "快手"], automated: true },
   { code: "xhs", name: "小红书", aliases: ["xiaohongshu", "小红书"], automated: true },
-  {
-    code: "fqsp",
-    name: "番茄视频",
-    aliases: ["fanqie", "fq", "番茄视频"],
-    automated: false,
-    note: "配置已接入，自动发布流程待完善",
-  },
 ];
 
 /**

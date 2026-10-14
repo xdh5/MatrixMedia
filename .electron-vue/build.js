@@ -8,7 +8,6 @@ const { Listr } = require('listr2')
 
 
 const mainConfig = require('./webpack.main.config')
-const rendererConfig = require('./webpack.renderer.config')
 
 const doneLog = chalk.bgGreen.white(' DONE ') + ' '
 const errorLog = chalk.bgRed.white(' ERROR ') + ' '
@@ -40,22 +39,10 @@ function build() {
       task: async (_, tasks) => {
         try {
           await pack(mainConfig)
+          tasks.output = `${okayLog}主进程已编译\n`
         } catch (error) {
           console.error(`\n${error}\n`)
           console.log(`\n  ${errorLog}failed to build main process`)
-          process.exit(1)
-        }
-      }
-    },
-    {
-      title: "building renderer process",
-      task: async (_, tasks) => {
-        try {
-          await pack(rendererConfig)
-          tasks.output = `${okayLog}take it away ${chalk.yellow('`electron-builder`')}\n`
-        } catch (error) {
-          console.error(`\n${error}\n`)
-          console.log(`\n  ${errorLog}failed to build renderer process`)
           process.exit(1)
         }
       },
@@ -96,18 +83,8 @@ function pack(config) {
 }
 
 function web() {
-  del.sync(['dist/web/*', '!.gitkeep'])
-  rendererConfig.mode = 'production'
-  webpack(rendererConfig, (err, stats) => {
-    if (err || stats.hasErrors()) console.log(err)
-
-    console.log(stats.toString({
-      chunks: false,
-      colors: true
-    }))
-
-    process.exit()
-  })
+  console.error("MatrixMedia 已移除图形界面，不再构建网页前端。")
+  process.exit(1)
 }
 
 function greeting() {

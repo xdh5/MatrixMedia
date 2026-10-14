@@ -174,7 +174,7 @@ export function parsePublishArgs(subArgv) {
       return {
         ok: false,
         error:
-          "缺少 --phone 或完整 --partition（与 GUI 一致，如 persist:13800138000抖音）",
+          "缺少 --phone 或完整 --partition（如 persist:13800138000抖音）",
       };
     }
     const phoneSeg = String(out.phone).split("-")[0];
@@ -185,7 +185,7 @@ export function parsePublishArgs(subArgv) {
     return {
       ok: false,
       error:
-        "缺少 --title（或 -t）视频标题（与 GUI「视频标题」一致，写入 data.bt1）",
+        "缺少 --title（或 -t）视频标题（写入 data.bt1）",
     };
   }
   // in dir mode title comes from xlsx per row, no global --title needed
@@ -441,7 +441,7 @@ function pickTargetCreativeStatement(target) {
 }
 
 /**
- * HTTP 创作声明解析（对齐 LocalVideoPublish 批量设置 + 单账号覆盖）
+ * HTTP 创作声明解析（批量设置 + 单账号覆盖）
  */
 export function resolveHttpPublishCreativeStatement(body, platformPt, target) {
   let raw = pickTargetCreativeStatement(target);
@@ -560,17 +560,17 @@ export function publishHelpText() {
   return `
 用法: <应用> cli publish [选项]
 
-字段与 GUI「本地视频发布」弹窗一致（见 LocalVideoPublish buildVideoPayload）：
+字段与命令行发布参数一致：
 
 选项:
-  -p, --platform <id>   平台：dy|抖音、tt|头条、ks|快手、blbl|哔哩哔哩、bjh|百家号、sph|视频号、xhs|小红书、fqsp|番茄视频
+  -p, --platform <id>   平台：dy|抖音、tt|头条、ks|快手、blbl|哔哩哔哩、bjh|百家号、sph|视频号、xhs|小红书
   -f, --file <path>     本地视频文件路径，或 http(s) 远程视频 URL（远程会先下载到临时目录，发布结束后自动删除）
       --dir <path>          [batch] video directory path; must be paired with --config
       --config <path>       [batch] xlsx declaration file path (columns: 文件名/标题/标签/创作声明)
       --cs, --creative-statement <val>  creative statement value for single-file mode.
                             Valid values: none | ai_generated | fiction | marketing | personal_opinion | repost | self_made_no_repost
                             (self_made_no_repost is blbl-only). Default: none.
-      --phone <id>      账号手机号（与 GUI 账号树一致，可与 partition 二选一）
+      --phone <id>      账号手机号（可与 partition 二选一）
       --partition <p>   完整 session partition，如 persist:13800138000抖音
   -t, --title <text>    视频标题（必填）→ data.bt1
       --name <n>        名称 / 任务记录名 → bookName；默认与视频文件名（无扩展名）一致
@@ -581,7 +581,7 @@ export function publishHelpText() {
                             哔哩哔哩/百家号/头条/快手当前不使用。
       --tags <text>     视频标签 → data.bq（同 --bq）。多个标签用【空格】分隔，例如 "减脂 健身 教程"。
                             【上限 4 个话题】：超过 4 个会触发 warn，agent 生成时请按相关性裁到 ≤ 4。
-                            • 视频号/抖音/快手：整串拼进描述末尾；未写 # 的标签会自动补上（与 GUI 标签多选一致）。
+                            • 视频号/抖音/快手：整串拼进描述末尾；未写 # 的标签会自动补上。
                             • 哔哩哔哩/小红书：按空格切分为独立标签，前导 # 会被自动剥离，可省。
                             • 百家号/头条：当前代码不消费 bq，无需填。
       --publish-at <t>  一次性定时发布，格式 "YYYY-MM-DD HH:mm:ss"。抖音、快手、视频号、
@@ -590,8 +590,8 @@ export function publishHelpText() {
                             不支持每日/每周/每月循环。
       --show            显示视频号自动化窗口；其它平台暂时忽略
       --no-close-window 发布后不自动关窗（与视频号 --show 一起使用）
-      --draft           显式发布到草稿箱（小红书点「暂存离开」）。若账号在 GUI「媒体平台管理」
-                            里开启了「默认发布到草稿」，即使不加该参数也会自动走草稿。
+      --draft           显式发布到草稿箱（小红书点「暂存离开」）。若账号配置了「默认发布到草稿」，
+                            即使不加该参数也会自动走草稿。
       --sph-product-id <id>   视频号商品上架（快捷参数，等价于 product + 商品编号）
       --sph-link-type <type>  视频号链接类型：none | product；传给其他平台时忽略
       --sph-link-value <id>   视频号商品编号；可单独传（默认按商品上架）

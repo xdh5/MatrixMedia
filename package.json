@@ -8,150 +8,14 @@
   "scripts": {
     "dev": "cross-env TERGET_ENV=development node .electron-vue/dev-runner.js",
     "predev": "node scripts/gen-telemetry-secret.js",
-    "dev:download": "node .electron-vue/dev-download-server.js",
     "build:dir": "cross-env BUILD_TARGET=clean node .electron-vue/build.js",
     "prebuild:dir": "node scripts/gen-telemetry-secret.js",
-    "rm:build": "node scripts/rm-build-dir.js",
-    "build:ico": "node scripts/build-ico.js",
-    "build": "yarn rm:build && yarn build:ico && yarn build:dir && electron-builder --win --x64",
-    "build:mac": "yarn rm:build && yarn build:dir && electron-builder --mac --x64 --arm64",
-    "build:mac:x64": "yarn rm:build && yarn build:dir && electron-builder --mac --x64",
-    "build:mac:arm64": "yarn rm:build && yarn build:dir && electron-builder --mac --arm64",
-    "build:linux": "yarn rm:build && yarn build:dir && electron-builder --linux --x64 --arm64",
-    "build:linux:x64": "yarn rm:build && yarn build:dir && electron-builder --linux --x64",
-    "build:linux:arm64": "yarn rm:build && yarn build:dir && electron-builder --linux --arm64",
-    "build:linux:deb": "yarn rm:build && yarn build:dir && electron-builder --linux deb --x64 --arm64",
-    "build:linux:appimage": "yarn rm:build && yarn build:dir && electron-builder --linux AppImage --x64 --arm64",
-    "build:linux:tar": "yarn rm:build && yarn build:dir && electron-builder --linux tar.gz --x64 --arm64",
-    "build:linux:local": "yarn rm:build && yarn build:dir && electron-builder --linux AppImage tar.gz --x64",
-    "build:all": "yarn rm:build && yarn build:ico && yarn build:dir && electron-builder --win --x64 --mac --x64 --arm64 --linux --x64 --arm64",
-    "dep:upgrade": "yarn upgrade-interactive --latest",
-    "postinstall": "electron-builder install-app-deps",
-    "pushall": "node pushall.js",
-    "release:patch": "node scripts/release-github.js patch",
-    "release:minor": "node scripts/release-github.js minor",
-    "release:major": "node scripts/release-github.js major",
-    "xz": "node .electron-vue/dev-download-server.js",
-    "test:dev-download-server": "node scripts/test-dev-download-server.js",
     "test:main-process-log-file": "node scripts/test-main-process-log-file.js",
     "test:cli-login": "node scripts/test-cli-login.js",
-    "test:publish-article-args": "node scripts/test-publish-article-args.js",
-    "test:article-republish": "node scripts/test-article-republish.js",
-    "test:puppeteer-cancel": "node scripts/test-puppeteer-cancel.js",
-    "test:account-login-window-manager": "node scripts/test-account-login-window-manager.js",
-    "test:pick-release-installer": "node scripts/test-pick-release-installer.js"
-  },
-  "build": {
-    "forceCodeSigning": false,
-    "asar": true,
-    "asarUnpack": [
-      "**/*.node"
-    ],
-    "electronLanguages": [
-      "zh-CN"
-    ],
-    "extraFiles": [
-      {
-        "from": "lib/icons/icon.ico",
-        "to": "matrixmedia.ico"
-      }
-    ],
-    "publish": [
-      {
-        "provider": "generic",
-        "url": "http://127.0.0.1"
-      }
-    ],
-    "productName": "矩媒",
-    "executableName": "matrixmedia",
-    "artifactName": "MatrixMedia-${version}-${os}-${arch}.${ext}",
-    "appId": "com.matrix.video",
-    "directories": {
-      "output": "build",
-      "buildResources": "lib/icons"
-    },
-    "files": [
-      "dist/electron/**/*",
-      "lib/icons/icon.ico",
-      "lib/icons/icon.png"
-    ],
-    "nsis": {
-      "oneClick": false,
-      "allowElevation": true,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "include": "scripts/nsis-path.nsh",
-      "installerIcon": "lib/icons/icon.ico",
-      "uninstallerIcon": "lib/icons/icon.ico",
-      "installerHeaderIcon": "lib/icons/icon.ico"
-    },
-    "win": {
-      "icon": "lib/icons/icon.ico",
-      "target": "nsis"
-    },
-    "mac": {
-      "icon": "lib/icons/icon.png",
-      "target": "dmg",
-      "identity": null
-    },
-    "dmg": {
-      "format": "ULFO"
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb",
-        "rpm",
-        "tar.gz"
-      ],
-      "category": "Utility",
-      "icon": "lib/icons/icon.png",
-      "maintainer": "lhl",
-      "vendor": "MatrixMedia",
-      "synopsis": "自媒体矩阵批量发布工具",
-      "description": "MatrixMedia 矩媒：多平台视频矩阵发布与批量分发工具，支持 GUI、CLI、HTTP API 与 MCP。",
-      "desktop": {
-        "Name": "矩媒 MatrixMedia",
-        "Comment": "自媒体矩阵批量发布工具",
-        "Categories": "Utility;Network;AudioVideo;",
-        "Terminal": "false"
-      }
-    },
-    "deb": {
-      "depends": [
-        "libgtk-3-0",
-        "libnotify4",
-        "libnss3",
-        "libxss1",
-        "libxtst6",
-        "xdg-utils",
-        "libatspi2.0-0",
-        "libdrm2",
-        "libgbm1"
-      ],
-      "category": "Utility"
-    },
-    "rpm": {
-      "depends": [
-        "gtk3",
-        "libnotify",
-        "nss",
-        "libXScrnSaver",
-        "libXtst",
-        "xdg-utils",
-        "at-spi2-atk",
-        "libdrm",
-        "mesa-libgbm"
-      ]
-    },
-    "appImage": {
-      "artifactName": "MatrixMedia-${version}-${os}-${arch}.AppImage"
-    }
+    "test:puppeteer-cancel": "node scripts/test-puppeteer-cancel.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
-    "electron-updater": "^5.3.0",
     "express": "4.19.2",
     "fs-extra": "^11.1.0",
     "jsqr": "^1.4.0",
@@ -188,63 +52,31 @@
     "@babel/runtime": "^7.22.5",
     "@types/fs-extra": "^11.0.1",
     "@types/node": "^18.14.5",
-    "@vue/babel-helper-vue-jsx-merge-props": "^1.4.0",
-    "@vue/babel-preset-jsx": "^1.4.0",
     "adm-zip": "^0.5.10",
-    "autoprefixer": "^10.4.14",
-    "babel-loader": "^9.1.2",
     "cfonts": "^2.10.0",
     "chalk": "^4.1.2",
-    "copy-webpack-plugin": "^11.0.0",
     "core-js": "^3.31.0",
     "cross-env": "^7.0.3",
-    "css-loader": "^6.8.1",
     "date-fns": "^2.30.0",
     "del": "^6.1.1",
     "dotenv": "^16.1.4",
     "electron": "^24.8.5",
-    "electron-builder": "^24.4.0",
-    "electron-devtools-installer": "^3.2.0",
-    "element-ui": "^2.15.13",
     "esbuild-loader": "^3.0.1",
     "eslint": "^7.32.0",
     "eslint-config-standard": "^14.1.1",
     "eslint-friendly-formatter": "^4.0.1",
-    "eslint-plugin-html": "^6.2.0",
     "eslint-plugin-import": "^2.25.4",
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-promise": "^4.3.1",
     "eslint-plugin-standard": "^5.0.0",
     "eslint-webpack-plugin": "^3.2.0",
     "extract-zip": "^2.0.1",
-    "html-webpack-plugin": "^5.5.3",
     "listr2": "^5.0.7",
-    "mini-css-extract-plugin": "2.7.6",
     "minimist": "^1.2.8",
     "node-loader": "^2.0.0",
-    "nprogress": "^0.2.0",
-    "pinia": "^2.0.33",
     "portfinder": "^1.0.32",
-    "postcss": "^8.4.31",
-    "postcss-loader": "^7.3.3",
-    "sass": "1.63.4",
-    "sass-loader": "13.3.2",
-    "style-loader": "^3.3.3",
-    "svg-sprite-loader": "^6.0.11",
     "terser-webpack-plugin": "^5.3.9",
-    "vue": "^2.7.14",
-    "vue-html-loader": "^1.2.4",
-    "vue-i18n": "^8.27.1",
-    "vue-loader": "15.10.1",
-    "vue-router": "^3.6.5",
-    "vue-style-loader": "^4.1.3",
-    "vue-template-compiler": "^2.7.14",
-    "vuedraggable": "^2.24.3",
     "webpack": "^5.87.0",
-    "webpack-cli": "^5.1.4",
-    "webpack-dev-server": "^4.15.1",
-    "webpack-hot-middleware": "^2.25.3",
-    "webpack-merge": "^5.9.0",
-    "windicss-webpack-plugin": "^1.8.0"
+    "webpack-cli": "^5.1.4"
   }
 }

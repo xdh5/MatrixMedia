@@ -55,26 +55,15 @@ cd mcp && npm install && npm run build
 | Tool              | 底层 CLI                  | 说明                                           |
 | ----------------- | ------------------------- | ---------------------------------------------- |
 | `list_accounts`   | `cli accounts --json`     | 列出本机已登录账号，支持按平台过滤             |
-| `list_history`    | `cli history --json`      | 查询本机发布记录，支持按平台/状态/天数过滤     |
 | `login`           | `cli login --save-qr-png` | 截取抖音/视频号登录二维码，返回图片给 Agent    |
 | `login_status`    | 查询进行中的 `cli login`  | 等待用户扫码，直到登录成功                     |
 | `publish_video`   | `cli publish ...`         | 发布视频（最长约 35 分钟，支持草稿和定时发布） |
-| `publish_article` | `cli publish-article ...` | 发布掘金文章（需已登录掘金账号）               |
 
 ### list_accounts
 
 | 参数       | 必填 | 说明                                                                              |
 | ---------- | ---- | --------------------------------------------------------------------------------- |
-| `platform` | 否   | 平台过滤：`dy` / `ks` / `blbl` / `bjh` / `tt` / `sph` / `xhs` / `juejin` / `fqsp` |
-
-### list_history
-
-| 参数       | 必填 | 说明                                              |
-| ---------- | ---- | ------------------------------------------------- |
-| `days`     | 否   | 最近 N 天，默认 7                                 |
-| `platform` | 否   | 平台过滤                                          |
-| `status`   | 否   | `success` / `failed` / `publishing` / `scheduled` |
-| `all`      | 否   | 为 `true` 时返回全部历史                          |
+| `platform` | 否   | 平台过滤：`dy` / `ks` / `blbl` / `bjh` / `tt` / `sph` / `xhs` |
 
 ### login
 
@@ -129,30 +118,13 @@ cd mcp && npm install && npm run build
 
 当 `platform` 不是 `sph` 时，`sphProductId` / `sphLink` 会被忽略。若商品添加失败但视频已成功转存草稿，Tool 返回 `status: needs_attention`，不会误报为发布成功。
 
-### publish_article
-
-| 参数        | 必填   | 说明                   |
-| ----------- | ------ | ---------------------- |
-| `platform`  | 是     | 目前仅支持 `juejin`    |
-| `phone`     | 是     | 已登录掘金账号手机号   |
-| `title`     | 是     | 文章标题               |
-| `content`   | 二选一 | 正文内容               |
-| `file`      | 二选一 | Markdown 文件路径      |
-| `cover`     | 否     | 封面图片路径           |
-| `category`  | 否     | 分类                   |
-| `tags`      | 否     | 标签                   |
-| `summary`   | 否     | 摘要                   |
-| `publishAt` | 否     | 定时发布时间           |
-| `show`      | 否     | 是否显示底层浏览器窗口 |
-
 ## 登录说明
 
 - 发布前用 `list_accounts` 看登录态。
 - **抖音 / 视频号 / 快手未登录**：调用 `login(platform, phone)`。工具会打开登录页、截取二维码，并以图片返回。Agent 必须把这张图发给用户扫码，然后反复调用 `login_status(login_id)`，直到 `status=success`，再 `publish_video`。
-- **其它平台未登录**：请用户在矩媒 GUI 扫码登录；MCP 无法弹窗。
-- `login` 与 GUI / `publish_video` 共用同一 session partition。
+- **其它平台未登录**：使用 `cli login` 扫码；当前登录命令支持抖音、快手、头条和视频号。
+- `login` 与 `publish` 共用同一 session partition，Cookie 在 MatrixMedia 目录的 `data` 中。
 
 ## 相关文档
 
 - [CLI 说明](./cli.md)
-- [HTTP API 说明](./http-api.md)

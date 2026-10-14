@@ -4,7 +4,6 @@ import path from "path";
 import { normalizeCreativeStatement } from "../../shared/creativeStatement.js";
 import ptConfig from "../config/ptConfig";
 import { runPuppeteerTask } from "./puppeteerFile";
-import { changeData } from "../server/utils";
 import { CLI_PUBLISH_TIMEOUT_MS } from "./upLoad/uploadTimeouts.js";
 import {
   isRemotePublishFile,
@@ -25,12 +24,6 @@ function fileStemFromSource(source) {
     : path.basename(path.resolve(raw));
   const i = base.lastIndexOf(".");
   return i > 0 ? base.slice(0, i) : base;
-}
-
-function todayYmd() {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function derivePhoneForRecord(v) {
@@ -187,112 +180,8 @@ async function runSingleFilePublishInner(
   };
 
   const taskId = taskPayload.taskId;
-  const recordDate = todayYmd();
-  const selectedFile = isRemotePublishFile(sourceFile)
-    ? guessFileNameFromUrl(sourceFile)
-    : path.basename(resolvedFile);
-  const recordItem = {
-    bookName,
-    textOtherName: stem,
-    textType: "local",
-    pt: v.platform,
-    selectedFile,
-    bt: bt1,
-    bt2,
-    bq: String(v.bq || "").trim(),
-    creativeStatement: normalizeCreativeStatement(v.creativeStatement || ""),
-    filePath:
-      v.publishAt && isRemotePublishFile(sourceFile)
-        ? sourceFile
-        : resolvedFile,
-    remoteFileUrl: isRemotePublishFile(sourceFile) ? sourceFile : "",
-    useragent: cfg.useragent,
-    phone: derivePhoneForRecord(v),
-    partition: v.partition,
-    url: cfg.listIndex,
-    uploadUrl: cfg.upload,
-    date: recordDate,
-    publishAttemptCount: 1,
-    republishCount: 0,
-    publishSuccessCount: 0,
-    publishFailCount: 0,
-    publishMode: effectivePublishMode.publishMode,
-    publishToDraft: effectivePublishMode.publishToDraft,
-    publishOptions: v.publishOptions || {},
-    scheduledTask: false,
-    officialScheduledPublish,
-    scheduledPublishAt: officialScheduledPublish
-      ? parsedPublishAt.value
-      : null,
-    scheduledPublishAtText: officialScheduledPublish
-      ? parsedPublishAt.text
-      : "",
-    publishStatus: officialScheduledPublish
-      ? "scheduling"
-      : effectivePublishMode.publishToDraft
-        ? "drafting"
-        : "publishing",
-    lastPublishMessage: officialScheduledPublish
-      ? "正在提交平台官方定时发布"
-      : effectivePublishMode.publishToDraft
-        ? "等待保存草稿结果"
-        : "等待发布结果",
-    lastPublishAt: Date.now(),
-    publishProcessId: process.pid,
-  };
-
-  let recordId = null;
-  try {
-    const addRes = changeData({
-      fileName: "pushData",
-      type: "add",
-      item: recordItem,
-    });
-    if (addRes && addRes.success === false) {
-      return {
-        exitCode: 1,
-        status: "failed",
-        message: addRes.message || "写入发布任务失败",
-      };
-    }
-    if (addRes && addRes.success && Array.isArray(addRes.data)) {
-      const found = [...addRes.data]
-        .reverse()
-        .find(
-          (it) =>
-            it.textOtherName === recordItem.textOtherName &&
-            it.pt === recordItem.pt &&
-            it.selectedFile === recordItem.selectedFile &&
-            it.textType === recordItem.textType
-        );
-      if (found) recordId = found.id;
-    }
-  } catch (e) {
-    console.error("MatrixMedia: 写入 pushData 初始记录失败:", e && e.message);
-  }
-
-  const updateRecord = (status, message) => {
-    if (!recordId) return;
-    try {
-      changeData({
-        fileName: "pushData",
-        type: "update",
-        item: {
-          id: recordId,
-          date: recordDate,
-          publishStatus: status,
-          publishSuccessCount:
-            status === "success" || status === "draft" ? 1 : 0,
-          publishFailCount: status === "failed" ? 1 : 0,
-          lastPublishMessage: message || "",
-          lastPublishAt: Date.now(),
-          publishProcessId: null,
-        },
-      });
-    } catch (e) {
-      console.error("MatrixMedia: 更新 pushData 记录失败:", e && e.message);
-    }
-  };
+  const recordId = null;
+  const updateRecord = () => {};
 
   return await new Promise((resolve) => {
     const waitForResult = options.waitForResult !== false;

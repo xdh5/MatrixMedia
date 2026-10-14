@@ -199,7 +199,7 @@ async function syncPageCookiesToElectronSession(page, ses) {
 }
 
 /**
- * 使用系统 Chrome/Chromium 无头启动，userDataDir 与 Electron partition 一致，便于与 GUI / publish 共用 Cookie。
+ * 使用系统 Chrome/Chromium 无头启动，userDataDir 与 Electron partition 一致，便于与 publish 共用 Cookie。
  * @param {{ partition: string, terminalQr: boolean, timeoutMs: number, saveQrPngPath?: string | null }} opts
  * @returns {Promise<number>}
  */

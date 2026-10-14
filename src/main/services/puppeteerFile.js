@@ -156,21 +156,6 @@ function isExpectedPublishUrl(data, currentUrl) {
       // URL 无法解析时继续使用各平台原有兼容判断。
     }
   }
-  if (data && data.pt === "掘金") {
-    try {
-      const current = new URL(currentUrl);
-      const expected = new URL(data.url);
-      return (
-        current.origin === expected.origin &&
-        current.pathname.indexOf("/editor/drafts") === 0
-      );
-    } catch (_) {
-      return (
-        String(currentUrl || "").indexOf("https://juejin.cn/editor/drafts") ===
-        0
-      );
-    }
-  }
   // 百家号上传页 baidu 经常追加/重排 query（app_id、登录态参数等），strict === 会一直
   // 走 URL 不匹配的重试关窗分支，导致 bjh handler 一次都进不去、日志也不会出现。
   // 改成 origin + /builder/rc/edit 前缀匹配。
@@ -186,37 +171,6 @@ function isExpectedPublishUrl(data, currentUrl) {
       return (
         String(currentUrl || "").indexOf(
           "https://baijiahao.baidu.com/builder/rc/edit"
-        ) === 0
-      );
-    }
-  }
-  if (data && data.pt === "番茄视频") {
-    try {
-      const current = new URL(currentUrl);
-      const expected = new URL(data.url);
-      return (
-        current.origin === expected.origin &&
-        current.pathname.indexOf("/fqvideo/home/publish-video") === 0
-      );
-    } catch (_) {
-      return (
-        String(currentUrl || "").indexOf(
-          "https://pugc.yueduwuxian.com/fqvideo/home/publish-video"
-        ) === 0
-      );
-    }
-  }
-  if (data && data.pt === "番茄视频状态") {
-    try {
-      const current = new URL(currentUrl);
-      return (
-        current.origin === "https://pugc.yueduwuxian.com" &&
-        current.pathname.indexOf("/fqvideo/home/video-list") === 0
-      );
-    } catch (_) {
-      return (
-        String(currentUrl || "").indexOf(
-          "https://pugc.yueduwuxian.com/fqvideo/home/video-list"
         ) === 0
       );
     }
@@ -355,9 +309,9 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
     // 使用独立的持久化 userDataDir：
     // - 不能用用户真实 Chrome 目录（Chrome 禁止默认目录开 remote-debugging）
     // - 不能用临时目录（每次丢失登录态）
-    // - 用 app userData 下的固定目录，首次登录后 cookie 持久保存，后续发布自动复用
+    // - 用项目 data 下的固定目录，首次登录后 cookie 持久保存，后续发布自动复用
     const chromeDataDir = path.join(
-      app.getPath("userData"),
+      app.getPath("sessionData"),
       "chrome-xhs-profile"
     );
 

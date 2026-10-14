@@ -83,7 +83,7 @@ export function parseLoginArgs(subArgv) {
   if (!SUPPORTED_LOGIN.includes(pt)) {
     return {
       ok: false,
-      error: `cli login 当前支持抖音、视频号、快手和头条，收到: ${out.platform}。其它平台请先用 GUI 登录或后续再扩展。`
+      error: `cli login 当前支持抖音、视频号、快手和头条，收到: ${out.platform}。`
     }
   }
   out.platform = pt
@@ -93,7 +93,7 @@ export function parseLoginArgs(subArgv) {
       return {
         ok: false,
         error:
-          '缺少 --phone 或完整 --partition（须与 GUI / publish 一致，如 persist:13800138000抖音）'
+          '缺少 --phone 或完整 --partition（须与 publish 一致，如 persist:13800138000抖音）'
       }
     }
     const phoneSeg = String(out.phone).split('-')[0]
@@ -134,7 +134,7 @@ export function loginHelpText() {
   return `
 用法: <应用> cli login [选项]
 
-与 GUI 共用同一 session partition（Cookie 持久化）。当前支持抖音、视频号、快手、头条。
+Cookie 保存在 MatrixMedia 目录的 data 中。当前支持抖音、视频号、快手、头条。
 
 终端扫码（默认）：同一 Electron 窗口 + puppeteer-in-electron 的 CDP 截图（page.screenshot），无需屏外坐标。Linux 无图形环境或 SSH 建议用 xvfb-run -a 包一层。
 
@@ -144,7 +144,7 @@ export function loginHelpText() {
 
 选项:
   -p, --platform <id>   支持 dy / 抖音、sph / 视频号、ks / 快手、tt / 头条
-      --phone <id>      账号手机号（与 GUI 一致，与 --partition 二选一）
+      --phone <id>      账号手机号（与 --partition 二选一）
       --partition <p>   完整 partition，如 persist:13800138000抖音
       --show              弹出登录窗口（视频号默认支持；抖音 CLI 不支持）
       --hide              不显示窗口（默认即为隐藏）
