@@ -16,6 +16,8 @@ class YouTubeHttp(httplib2.Http):
 
     def __init__(self):
         super().__init__(timeout=60)
+        # Google 断点续传使用 308 表示继续上传，不能按普通重定向处理。
+        self.redirect_codes = self.redirect_codes - {308}
         self._fallback_active = False
 
     def request(self, uri, method="GET", body=None, headers=None, **kwargs):

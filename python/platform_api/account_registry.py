@@ -30,6 +30,14 @@ def registry() -> dict:
 def credential(ref: str) -> dict:
     raw = os.getenv("PUBLISHING_CREDENTIALS_JSON", "").strip()
     path = Path(os.getenv("PUBLISHING_CREDENTIALS_FILE", "") or DATA_ROOT / "credentials.json")
+    # 容器挂载同一工作区时，将宿主 Windows 凭据路径映射到子仓库的数据目录。
+    configured = str(path).replace("\\", "/")
+    marker = "/integrations/media-publisher/data/"
+    if Path("/.dockerenv").exists() and re.match(r"^[A-Za-z]:/", configured) and marker in configured:
+        mapped = (DATA_ROOT / configured.split(marker, 1)[1]).resolve()
+        if not mapped.is_relative_to(DATA_ROOT.resolve()):
+            raise ValueError("发布凭据路径超出数据目录")
+        path = mapped
     values = json.loads(raw) if raw else (json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {})
     selected = values.get(ref)
     if not isinstance(selected, dict):
