@@ -202,6 +202,29 @@ def delete_youtube_video(video_id: str, channel_id: str, *, account: str | None 
     return {"video_id": normalized_video_id, "channel_id": channel_id, "deleted": True}
 
 
+def _apply_thumbnail(youtube, video_id: str, thumbnail: Path | None) -> None:
+    """上传自定义封面。视频刚创建时接口可能暂时拒绝，短暂重试。"""
+    if thumbnail is None or not thumbnail.is_file():
+        return
+    mime = mimetypes.guess_type(thumbnail.name)[0] or "image/jpeg"
+    last_error: HttpError | None = None
+    for attempt in range(5):
+        try:
+            youtube.thumbnails().set(
+                videoId=video_id,
+                media_body=MediaFileUpload(str(thumbnail), mimetype=mime),
+            ).execute()
+            return
+        except HttpError as exc:
+            last_error = exc
+            status = int(getattr(exc.resp, "status", 0) or 0)
+            if status not in {400, 403, 404, 429, 500, 503} or attempt == 4:
+                raise
+            time.sleep(3)
+    if last_error is not None:
+        raise last_error
+
+
 def _upload_tag(video: Path, publication_id: str) -> str:
     """以产物标识和文件内容识别同一次上传，避免同名新视频复用旧视频。"""
     digest = hashlib.sha256(publication_id.encode("utf-8"))
@@ -258,13 +281,14 @@ def _find_existing_video(youtube, channel_id: str, title: str, upload_tag: str) 
     verified = []
     for offset in range(0, len(matches), 50):
         ids = ",".join(item["video_id"] for item in matches[offset:offset + 50])
-        details = youtube.videos().list(part="snippet,status", id=ids).execute()
+        details = youtube.videos().list(part="snippet,status,processingDetails", id=ids).execute()
         for item in details.get("items") or []:
             if upload_tag not in ((item.get("snippet") or {}).get("tags") or []):
                 continue
             status = item.get("status") or {}
-            if status.get("uploadStatus") in {"failed", "rejected", "deleted"}:
-                raise UploadError("本次 YouTube 上传被平台拒绝或删除", {"video_id": item["id"], "status": status})
+            processing = (item.get("processingDetails") or {}).get("processingStatus")
+            if status.get("uploadStatus") in {"failed", "rejected", "deleted"} or processing in {"failed", "terminated"}:
+                continue
             verified.append({"video_id": item["id"], "status": status})
     if not verified:
         return None
@@ -325,6 +349,7 @@ def publish_to_youtube(
                     f"title={normalized_title[:100]!r} video_id={existing['video_id']}",
                     file=sys.stderr, flush=True,
                 )
+                _apply_thumbnail(youtube, existing["video_id"], thumbnail)
                 return {
                     "video_id": existing["video_id"],
                     "video_url": f"https://www.youtube.com/watch?v={existing['video_id']}",
@@ -379,12 +404,7 @@ def publish_to_youtube(
             video_id = str((response or {}).get("id") or "")
             if not video_id:
                 raise UploadError("YouTube 未返回 video_id，上传失败")
-            if thumbnail and thumbnail.is_file():
-                mime = mimetypes.guess_type(thumbnail.name)[0] or "application/octet-stream"
-                youtube.thumbnails().set(
-                    videoId=video_id,
-                    media_body=MediaFileUpload(str(thumbnail), mimetype=mime),
-                ).execute()
+            _apply_thumbnail(youtube, video_id, thumbnail)
             if caption and caption.is_file():
                 youtube.captions().insert(
                     part="snippet",
