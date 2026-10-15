@@ -332,6 +332,8 @@ def publish_to_youtube(
     upload_tag = _upload_tag(video, publication_id)
     normalized_tags.append(upload_tag)
     thumbnail = Path(thumbnail_path).resolve() if thumbnail_path else None
+    if thumbnail is not None and not thumbnail.is_file():
+        raise InvalidParameterError(f"封面文件不存在：{thumbnail}", {"parameter": "thumbnail_path"})
     caption = Path(caption_path).resolve() if caption_path else None
     credentials = _load_credentials(channel_id, account)
     try:

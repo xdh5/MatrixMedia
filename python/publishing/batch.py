@@ -24,6 +24,7 @@ def _target_from_item(item: dict, platform: str) -> dict:
         "title": title,
         "description": _text(item.get("description")),
         "file": _text(item.get("file")),
+        "thumbnail_path": _text(item.get("thumbnail_path")),
         "video_url": _text(item.get("video_url")),
         "tags": _text(item.get("tags")),
         "bt2": _text(item.get("bt2") or item.get("short_title")),
@@ -104,6 +105,7 @@ def _publish_official_with_context(target: dict, account: dict, spec: PlatformSp
             privacy_status="public",
             publish_at=publish_at,
             publication_id=target["publication_id"],
+            thumbnail_path=target["thumbnail_path"] or None,
         )
     if spec.code == "tiktok":
         return publish_to_tiktok(
