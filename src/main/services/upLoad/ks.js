@@ -11,71 +11,99 @@ import {
   waitForOfficialScheduleAccepted,
 } from "./officialSchedule.js";
 
+const TITLE_SELECTORS = [
+  'input[placeholder*="标题"]',
+  'textarea[placeholder*="标题"]',
+  '[contenteditable="true"][data-placeholder*="标题"]',
+];
+const DESCRIPTION_SELECTORS = [
+  '#work-description-edit [contenteditable="true"]',
+  "#work-description-edit textarea",
+  "#work-description-edit input",
+  '#work-description-edit[contenteditable="true"]',
+  'textarea[placeholder*="描述"]',
+  '[contenteditable="true"][data-placeholder*="描述"]',
+  '[contenteditable="true"][aria-label*="描述"]',
+];
+
 async function findVisibleEditable(page, selectors) {
   for (const selector of selectors) {
     const nodes = await page.$$(selector);
     for (const node of nodes) {
       const visible = await node.evaluate((element) => {
+        if (!element.isConnected) return false;
         const rect = element.getBoundingClientRect();
         const style = window.getComputedStyle(element);
-        return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden";
-      });
+        return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+      }).catch(() => false);
       if (visible) return node;
     }
   }
   return null;
 }
 
-async function fillAndVerify(page, input, text, fieldName) {
-  const normalizedExpected = text.replace(/\s+/g, " ").trim();
-  await input.click({ clickCount: 3 });
-  await page.keyboard.down("Control");
-  await page.keyboard.press("A");
-  await page.keyboard.up("Control");
-  await page.keyboard.press("Backspace");
-  await page.keyboard.type(text, { delay: 30 });
-  await page.waitForTimeout(200);
+function normalizeFieldText(text) {
+  return String(text || "").replace(/\s+/g, " ").trim();
+}
 
-  const readEditables = () => page.evaluate(() =>
-    Array.from(document.querySelectorAll('input,textarea,[contenteditable="true"]'))
-      .filter((element) => {
-        const rect = element.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
-      })
-      .map((element) => String(
-        element.value != null
-          ? element.value
-          : element.innerText || element.textContent || ""
-      ).trim())
-      .filter(Boolean)
-  );
-  let values = await readEditables();
-  if (!values.some((value) => value.replace(/\s+/g, " ").trim().includes(normalizedExpected))) {
-    await input.evaluate((element, value) => {
-      if (!element.isConnected) return;
-      element.focus();
-      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-        const prototype = element instanceof HTMLInputElement
-          ? HTMLInputElement.prototype
-          : HTMLTextAreaElement.prototype;
-        const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
-        setter?.call(element, value);
-      } else {
-        element.textContent = value;
-      }
-      element.dispatchEvent(new InputEvent("input", {
-        bubbles: true,
-        inputType: "insertText",
-        data: value,
-      }));
+async function readFieldText(input) {
+  return input.evaluate((element) => {
+    if (!element.isConnected) return "";
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+      return element.value || "";
+    }
+    return element.innerText || element.textContent || "";
+  }).catch(() => "");
+}
+
+// 整段插入。逐字输入遇到 # 会弹出话题框，后续字符进不了描述；编辑器重绘后旧节点也会失效。
+async function insertFieldText(input, text) {
+  await input.evaluate((element, value) => {
+    if (!element.isConnected) throw new Error("输入框已脱离页面");
+    element.focus();
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+      const prototype = element instanceof HTMLInputElement
+        ? HTMLInputElement.prototype
+        : HTMLTextAreaElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+      setter?.call(element, value);
+      element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
       element.dispatchEvent(new Event("change", { bubbles: true }));
-    }, text);
-    await page.waitForTimeout(200);
-    values = await readEditables();
+      return;
+    }
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.execCommand("delete", false);
+    if (!document.execCommand("insertText", false, value)) {
+      element.textContent = value;
+      element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
+    }
+  }, text);
+}
+
+async function fillAndVerify(page, selectors, text, fieldName) {
+  const normalizedExpected = normalizeFieldText(text);
+  let lastText = "";
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const input = await findVisibleEditable(page, selectors);
+    if (!input) throw new Error(`未找到${fieldName}输入框`);
+    try {
+      await insertFieldText(input, text);
+    } catch (error) {
+      lastText = error instanceof Error ? error.message : String(error);
+      await page.waitForTimeout(400);
+      continue;
+    }
+    await page.waitForTimeout(300);
+    const current = await findVisibleEditable(page, selectors);
+    lastText = current ? normalizeFieldText(await readFieldText(current)) : "";
+    if (lastText.includes(normalizedExpected)) return;
+    await page.waitForTimeout(400);
   }
-  if (!values.some((value) => value.replace(/\s+/g, " ").trim().includes(normalizedExpected))) {
-    throw new Error(`${fieldName}写入后校验失败，页面可编辑内容为：${values.join(" | ") || "空"}`);
-  }
+  throw new Error(`${fieldName}写入后校验失败，当前内容为：${lastText || "空"}`);
 }
 
 async function fillKsCopy(page, data) {
@@ -84,24 +112,12 @@ async function fillKsCopy(page, data) {
   const tags = String(data.data?.bq || "").trim();
   if (!title) throw new Error("快手标题不能为空");
 
-  const titleInput = await findVisibleEditable(page, [
-    'input[placeholder*="标题"]',
-    'textarea[placeholder*="标题"]',
-    '[contenteditable="true"][data-placeholder*="标题"]',
-  ]);
-  const descriptionInput = await findVisibleEditable(page, [
-    '#work-description-edit [contenteditable="true"]',
-    "#work-description-edit textarea",
-    "#work-description-edit input",
-    '#work-description-edit[contenteditable="true"]',
-    'textarea[placeholder*="描述"]',
-    '[contenteditable="true"][data-placeholder*="描述"]',
-    '[contenteditable="true"][aria-label*="描述"]',
-  ]);
+  const titleInput = await findVisibleEditable(page, TITLE_SELECTORS);
+  const descriptionInput = await findVisibleEditable(page, DESCRIPTION_SELECTORS);
   if (!descriptionInput) throw new Error("未找到快手作品描述输入框");
 
   if (titleInput) {
-    await fillAndVerify(page, titleInput, title, "快手标题");
+    await fillAndVerify(page, TITLE_SELECTORS, title, "快手标题");
   }
   const descriptionParts = [];
   if (!titleInput) descriptionParts.push(title);
@@ -115,7 +131,7 @@ async function fillKsCopy(page, data) {
     if (missingTags.length) descriptionParts.push(missingTags.join(" "));
   }
   const copy = descriptionParts.join("\n").trim() || title;
-  await fillAndVerify(page, descriptionInput, copy, "快手作品描述");
+  await fillAndVerify(page, DESCRIPTION_SELECTORS, copy, "快手作品描述");
   console.log(`[ks] 标题和作品描述已写入，独立标题框=${Boolean(titleInput)}`);
 }
 
