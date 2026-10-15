@@ -155,8 +155,7 @@ export const loginTool: Tool = {
       },
       account_group: {
         type: "string",
-        enum: ["finance", "korean", "chinese"],
-        description: "data 目录中的账号组，登录态写入 data/<账号组>",
+        description: "数据库或本地配置中的账号组，登录态写入 data/<账号组>",
       },
       timeoutSec: {
         type: "number",

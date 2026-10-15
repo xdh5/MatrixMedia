@@ -35,10 +35,10 @@ def _apply_legacy_env(group: str) -> None:
             os.environ[dest] = text
 
 
-def _accounts(group: str) -> list[dict]:
+def _accounts(group: str, platform: str | None = None) -> list[dict]:
     _apply_legacy_env(group)
     rows = []
-    for item in list_youtube_accounts(group):
+    for item in (list_youtube_accounts(group) if platform in (None, "youtube") else []):
         rows.append({
             "platform": "youtube",
             "account_ref": item["account"],
@@ -46,7 +46,7 @@ def _accounts(group: str) -> list[dict]:
             "platform_account_id": item["channel_id"],
             "display_name": item["channel_title"],
         })
-    for item in list_tiktok_accounts(group):
+    for item in (list_tiktok_accounts(group) if platform in (None, "tiktok") else []):
         rows.append({
             "platform": "tiktok",
             "account_ref": item["account"],
@@ -54,7 +54,7 @@ def _accounts(group: str) -> list[dict]:
             "platform_account_id": item["platform_account_id"],
             "display_name": item["account_title"],
         })
-    for item in list_instagram_accounts(group):
+    for item in (list_instagram_accounts(group) if platform in (None, "instagram") else []):
         rows.append({
             "platform": "instagram",
             "account_ref": item["account"],
@@ -62,7 +62,7 @@ def _accounts(group: str) -> list[dict]:
             "platform_account_id": item["platform_account_id"],
             "display_name": item["account_title"],
         })
-    for item in list_facebook_accounts(group):
+    for item in (list_facebook_accounts(group) if platform in (None, "facebook") else []):
         rows.append({
             "platform": "facebook",
             "account_ref": item["account"],

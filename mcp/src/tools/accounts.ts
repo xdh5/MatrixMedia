@@ -11,7 +11,6 @@ export const listAccountsTool: Tool = {
     properties: {
       account_group: {
         type: "string",
-        enum: ["finance", "korean", "chinese"],
         description: "可选。只看某一个账号组；不传则列出 data 里现有的全部账号组",
       },
       platform: {

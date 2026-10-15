@@ -34,7 +34,8 @@ load_project_env()
 
 
 def _env(name: str) -> str:
-    return os.getenv(name, "").strip()
+    from ..account_registry import env_value
+    return env_value(name)
 
 
 def _api_key() -> str:

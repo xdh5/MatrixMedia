@@ -20,6 +20,7 @@ def _target_from_item(item: dict, platform: str) -> dict:
         raise PublishError("视频缺少 title")
     return {
         "platform": platform,
+        "account_key": _text(item.get("account_key")),
         "title": title,
         "description": _text(item.get("description")),
         "file": _text(item.get("file")),
@@ -78,6 +79,14 @@ def _check_target(target: dict, spec: PlatformSpec) -> None:
 
 
 def _publish_official(target: dict, account: dict, spec: PlatformSpec, timing: dict) -> dict:
+    if account.get("credential_ref"):
+        from platform_api.account_registry import account_context
+        with account_context(account) as key:
+            return _publish_official_with_context(target, {**account, "account_group": key}, spec, timing)
+    return _publish_official_with_context(target, account, spec, timing)
+
+
+def _publish_official_with_context(target: dict, account: dict, spec: PlatformSpec, timing: dict) -> dict:
     from platform_api.facebook.publish_to_facebook import publish_to_facebook
     from platform_api.instagram.publish_to_instagram import publish_to_instagram
     from platform_api.tiktok.publish_to_tiktok import publish_to_tiktok
@@ -148,7 +157,7 @@ def _publish_browser(target: dict, account: dict, spec: PlatformSpec, timing: di
     return payload
 
 
-def publish_batch(request: dict, progress=None) -> dict:
+def publish_batch(request: dict, progress=None, *, account_routes: dict | None = None) -> dict:
     """发布 targets，或把 items 发到全部 platforms。单条失败不会中断其余目标。"""
     account_group = str((request or {}).get("account_group") or "").strip()
     if not account_group:
@@ -166,7 +175,21 @@ def publish_batch(request: dict, progress=None) -> dict:
         request.get("publish_at"),
         request.get("publish_at_by_platform"),
     )
-    accounts = resolve_group_accounts(account_group, specs)
+    accounts = account_routes or resolve_group_accounts(account_group, specs)
+    expanded = []
+    for target in targets:
+        if target["account_key"]:
+            expanded.append(target)
+            continue
+        matches = {
+            row["account_key"]: row for row in accounts.values()
+            if row.get("account_key") and row.get("platform") == target["platform"]
+        }
+        if matches:
+            expanded.extend({**target, "account_key": key} for key in matches)
+        else:
+            expanded.append(target)
+    targets = expanded
     published = []
     failed = []
     total = len(targets)
@@ -183,8 +206,14 @@ def publish_batch(request: dict, progress=None) -> dict:
             continue
         if progress:
             progress(f"正在发布 {index}/{total}：{spec.code} - {target['title']}")
-        account = accounts[spec.code]
         try:
+            account = accounts.get(target["account_key"] or spec.code)
+            if not account:
+                raise PublishError(f"请为 {spec.label} 指定唯一的 account_key")
+            if account.get("platform") and account["platform"] != spec.code:
+                raise PublishError(f"账号 {target['account_key']} 不属于 {spec.label}")
+            if account.get("error"):
+                raise PublishError(str(account["error"]))
             if spec.connector == "official":
                 result = _publish_official(target, account, spec, timing)
             else:
@@ -203,6 +232,7 @@ def publish_batch(request: dict, progress=None) -> dict:
             "client_ref": target["client_ref"],
             "account_id": account["account_id"],
             "platform_account_id": account["platform_account_id"],
+            "account_key": account.get("account_key", ""),
             "publish_mode": timing["publish_mode"],
             "publish_at": timing["publish_at"],
             "result": result,

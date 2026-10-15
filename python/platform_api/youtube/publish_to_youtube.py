@@ -46,7 +46,8 @@ load_project_env()
 
 
 def _env(name: str) -> str:
-    return os.getenv(name, "").strip()
+    from ..account_registry import env_value
+    return env_value(name)
 
 
 def _normalize_account(account: str) -> str:
@@ -77,7 +78,8 @@ def _youtube_settings(prefix: str) -> dict[str, str] | None:
 def _discover_prefixes() -> list[str]:
     load_project_env()
     prefixes = []
-    for key in os.environ:
+    from ..account_registry import env_items
+    for key, _ in env_items():
         if key.endswith(YOUTUBE_CHANNEL_ID_SUFFIX):
             prefix = key[: -len(YOUTUBE_CHANNEL_ID_SUFFIX)]
             if prefix and _youtube_settings(prefix):

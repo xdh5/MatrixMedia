@@ -37,7 +37,8 @@ load_project_env()
 
 
 def _env(name: str) -> str:
-    return os.getenv(name, "").strip()
+    from ..account_registry import env_value
+    return env_value(name)
 
 
 def _api_key() -> str:
@@ -120,7 +121,8 @@ def list_tiktok_accounts(account: str | None = None) -> list[dict]:
         if isinstance(item, dict)
     }
     accounts = []
-    for key, value in os.environ.items():
+    from ..account_registry import env_items
+    for key, value in env_items():
         if not key.endswith(TIKTOK_ACCOUNT_ID_SUFFIX) or not str(value).strip():
             continue
         prefix = key[: -len(TIKTOK_ACCOUNT_ID_SUFFIX)]

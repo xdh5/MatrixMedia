@@ -5,6 +5,7 @@ import { submitTask, pollTask } from "../tasks.js";
 const publishItemSchema = {
   type: "object",
   properties: {
+    account_key: { type: "string", description: "同平台有多个账号时指定数据库账号标识" },
     file: { type: "string", description: "本地视频绝对路径。浏览器平台和 YouTube 必填" },
     video_url: { type: "string", description: "公网视频地址。TikTok、Instagram、Facebook 必填" },
     title: { type: "string", description: "视频标题" },
@@ -31,8 +32,7 @@ export const startPublishTool: Tool = {
     properties: {
       account_group: {
         type: "string",
-        enum: ["finance", "korean", "chinese"],
-        description: "data 目录中的账号组",
+        description: "数据库或本地配置中的账号组",
       },
       platforms: {
         type: "array",

@@ -25,7 +25,8 @@ def load_matrix_group_envs() -> None:
 def accounts_with_suffix(suffix: str, account: str | None = None) -> list[tuple[str, str]]:
     wanted = str(account or "").strip().lower()
     found = []
-    for key, value in os.environ.items():
+    from .account_registry import env_items
+    for key, value in env_items():
         text = str(value or "").strip()
         if not key.endswith(suffix) or not text:
             continue

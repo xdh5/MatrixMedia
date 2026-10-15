@@ -22,10 +22,12 @@ def data_root() -> Path:
 
 
 def list_data_groups() -> list[str]:
+    from platform_api.account_registry import registry
+    configured = [str(row["name"]) for row in registry()["groups"]]
     root = data_root()
     if not root.is_dir():
-        return []
-    return [name for name in ACCOUNT_GROUPS if (root / name).is_dir()]
+        return configured
+    return sorted(set(configured + [item.name for item in root.iterdir() if item.is_dir() and not item.name.startswith(".")]))
 
 
 def _official_env_ready(group: str) -> bool:
@@ -44,8 +46,11 @@ def _official_env_ready(group: str) -> bool:
 
 def require_group(name: str) -> str:
     group = str(name or "").strip().casefold()
-    if group not in ACCOUNT_GROUPS:
-        raise PublishError(f"账号组「{name}」无效。可用账号组：{'、'.join(ACCOUNT_GROUPS)}")
+    import re
+    if not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", group):
+        raise PublishError(f"账号组「{name}」标识无效")
+    if group in list_data_groups():
+        return group
     if (data_root() / group).is_dir() or _official_env_ready(group):
         return group
     groups = list_data_groups()
@@ -92,6 +97,19 @@ def _browser_accounts(group: str) -> list[dict]:
 
 
 def _official_accounts(group: str) -> tuple[list[dict], str]:
+    from platform_api.account_registry import registry, verify_account
+    data = registry()
+    codes = {row["code"] for row in data["groups"] if row["name"] == group}
+    members = [row for row in data["members"] if row["group_code"] in codes and row.get("account_key")]
+    if members:
+        accounts = []
+        for row in members:
+            route = {**row, "account_group": group, "account_id": row["connector_account_id"]}
+            try:
+                accounts.append({**route, **verify_account(row)})
+            except Exception as exc:
+                accounts.append({**route, "error": str(exc)})
+        return accounts, ""
     try:
         from platform_api.cli import _accounts as list_official_rows
 
@@ -146,15 +164,14 @@ def resolve_group_accounts(account_group: str, platforms: list) -> dict[str, dic
     snapshots = list_account_groups(account_group)
     snapshot = snapshots[0]
     routes = {}
-    missing = []
     for spec in platforms:
         matches = [item for item in snapshot["accounts"] if item["platform"] == spec.code]
+        for item in matches:
+            if item.get("account_key"):
+                routes[item["account_key"]] = item
         if len(matches) != 1:
-            if spec.connector == "official" and snapshot["official_error"] and not matches:
-                raise PublishError(f"账号组「{account_group}」的 {spec.label} 账号读取失败：{snapshot['official_error']}")
-            missing.append(f"{spec.code}（{len(matches)} 个）")
+            if not matches:
+                routes[spec.code] = {"error": snapshot["official_error"] or f"账号组「{account_group}」缺少 {spec.label} 账号"}
             continue
         routes[spec.code] = matches[0]
-    if missing:
-        raise PublishError(f"账号组「{account_group}」无法唯一确定这些平台的账号：{'、'.join(missing)}")
     return routes
