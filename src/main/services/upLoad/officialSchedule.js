@@ -1005,22 +1005,26 @@ async function setDialogSchedule(page, platform, publishAt) {
       target.setAttribute("data-mm-bjh-select", id);
       return {
         id,
+        listId: input && (input.getAttribute("aria-controls") || input.getAttribute("aria-owns")),
         current: String(target.querySelector(".cheetah-select-selection-item")?.textContent || "").trim(),
       };
     }, index);
     if (!targetInfo.id) throw new Error(`百家号未找到${label}下拉框`);
     await page.click(`[data-mm-bjh-select="${targetInfo.id}"]`, { delay: 100 });
     await page.waitForTimeout(500);
-    const picked = await page.evaluate((values) => {
+    const picked = await page.evaluate((values, listId) => {
       const visible = (node) => {
         const style = window.getComputedStyle(node);
         const rect = node.getBoundingClientRect();
         return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
       };
       const norm = (text) => String(text || "").replace(/\s+/g, "").trim();
-      const candidates = [...document.querySelectorAll(
+      const list = listId && document.getElementById(listId);
+      const dropdowns = [...document.querySelectorAll(".cheetah-select-dropdown")].filter(visible);
+      const root = list || (dropdowns.length === 1 ? dropdowns[0] : null);
+      const candidates = root ? [...root.querySelectorAll(
         ".cheetah-select-item-option, [role='option']"
-      )].filter(visible);
+      )].filter(visible) : [];
       const target = candidates
         .filter((node) => values.includes(norm(node.textContent)))
         .sort((a, b) => a.querySelectorAll("*").length - b.querySelectorAll("*").length)[0];
@@ -1032,7 +1036,7 @@ async function setDialogSchedule(page, platform, publishAt) {
       }
       target.click();
       return { ok: true };
-    }, expected);
+    }, expected, targetInfo.listId);
     if (!picked.ok && index === 0) {
       const calendarPicked = await page.evaluate((iso) => {
         const visible = (node) => {
@@ -1057,14 +1061,14 @@ async function setDialogSchedule(page, platform, publishAt) {
       }
     }
     if (!picked.ok) {
-      const currentNumber = Number((String(targetInfo.current).match(/\d+/) || [])[0]);
       const expectedNumber = Number((expected[0].match(/\d+/) || [])[0]);
-      if (index === 0 || !Number.isFinite(currentNumber) || !Number.isFinite(expectedNumber)) {
+      if (index === 0 || !Number.isFinite(expectedNumber)) {
         throw new Error(`百家号${label}未找到选项 ${expected.join("/")}：${JSON.stringify(picked.options)}`);
       }
-      const key = expectedNumber < currentNumber ? "ArrowUp" : "ArrowDown";
-      for (let step = 0; step < Math.abs(expectedNumber - currentNumber); step += 1) {
-        await page.keyboard.press(key);
+      await page.focus(`#${index === 1 ? "select-hour" : "select-minute"}`);
+      await page.keyboard.press("Home");
+      for (let step = 0; step < expectedNumber; step += 1) {
+        await page.keyboard.press("ArrowDown");
       }
       await page.keyboard.press("Enter");
     }

@@ -1,5 +1,6 @@
 ﻿import { spawn, execSync, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
+import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,7 +14,18 @@ export interface CliResult {
 const VERSION_NOISE = /^\d+\.\d+\.\d+/;
 const DEVTOOLS_NOISE = /^DevTools listening/;
 const LOG_PREFIX = /^\[[^\]]+\] \[(?:LOG|INFO|WARN|ERROR|DEBUG)\] /;
-const TIMEOUT_MS = 2400000;
+const TIMEOUT_MS = 24 * 60 * 60 * 1000;
+let publicationQueue: Promise<unknown> = Promise.resolve();
+
+/** 仅清理本次创建的进程树。 */
+export function stopCliProcess(child: ChildProcess): void {
+  if (!child.pid || child.exitCode !== null) return;
+  if (process.platform === "win32") {
+    execFile("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true }, () => {});
+  } else {
+    child.kill("SIGTERM");
+  }
+}
 
 function isNoiseLine(line: string): boolean {
   const trimmed = line.trim();
@@ -65,6 +77,7 @@ export function resolveCliSpawn(args: string[]): {
 } {
   const dir = matrixDir();
   const env: NodeJS.ProcessEnv = { ...process.env };
+  env.MEDIA_PUBLISHER_PARENT_PID = String(process.pid);
 
   const localElectronBin = process.platform === 'win32'
     ? path.join(dir, 'node_modules', 'electron', 'dist', 'electron.exe')
@@ -104,11 +117,23 @@ export function spawnCli(args: string[]): ChildProcess {
     cwd,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
   });
 }
 
 /** 调用矩媒 publishing。发布、账号和平台定义都在 python/publishing。 */
 export function runMatrixPublish(
+  args: string[],
+  options?: { stdin?: string; timeoutMs?: number; onProgress?: (text: string) => void },
+): Promise<CliResult> {
+  if (args[0] !== "publish") return executeMatrixPublish(args, options);
+  options?.onProgress?.("等待发布队列");
+  const pending = publicationQueue.then(() => executeMatrixPublish(args, options));
+  publicationQueue = pending.catch(() => {});
+  return pending;
+}
+
+function executeMatrixPublish(
   args: string[],
   options?: { stdin?: string; timeoutMs?: number; onProgress?: (text: string) => void },
 ): Promise<CliResult> {
@@ -126,17 +151,12 @@ export function runMatrixPublish(
       env: {
         ...process.env,
         PYTHONUTF8: "1",
+        MEDIA_PUBLISHER_OWNER_PID: String(process.pid),
         PYTHONPATH: currentPath ? `${pythonDir}${path.delimiter}${currentPath}` : pythonDir,
       },
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     });
-    if (options?.stdin != null && child.stdin) {
-      child.stdin.write(options.stdin);
-      child.stdin.end();
-    } else {
-      child.stdin?.end();
-    }
     let stdout = "";
     let stderr = "";
     let settled = false;
@@ -154,7 +174,7 @@ export function runMatrixPublish(
     };
     const timer = setTimeout(() => {
       try {
-        child.kill("SIGTERM");
+        stopCliProcess(child);
       } catch {
         /* ignore */
       }
@@ -181,5 +201,11 @@ export function runMatrixPublish(
     child.on("close", (code: number | null) => {
       finish(typeof code === "number" ? code : 1);
     });
+    child.stdin?.on("error", (error: Error) => {
+      stderr += `\n发布请求写入失败：${error.message}`;
+      stopCliProcess(child);
+      finish(1);
+    });
+    child.stdin?.end(options?.stdin);
   });
 }

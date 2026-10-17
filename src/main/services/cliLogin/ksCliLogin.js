@@ -11,6 +11,7 @@ import ptConfig from "../../config/ptConfig";
 import { applyAccountProxyForTask } from "../proxyConfig.js";
 import { getKsUserId, clearKsSession, normalizeKsPartition } from "./ksSessionUtil.js";
 import { CLI_LOGIN_QR_FIRST_DELAY_MS, CLI_LOGIN_QR_REFRESH_MS } from "./cliLoginQrRefresh.js";
+import { verifyPublishLogin } from "./verifyPublishLogin.js";
 
 const puppeteer = addExtra(puppeteerCore);
 puppeteer.use(StealthPlugin());
@@ -141,9 +142,6 @@ export async function runKsCliLogin({
   if (force) {
     await clearKsSession(part);
     console.log("快手：已清理当前账号分区的旧会话，将重新生成登录二维码。");
-  } else if (await getKsUserId(part)) {
-    console.log("快手：当前账号已经登录，无需再次扫码。");
-    return 0;
   }
   try {
     await applyAccountProxyForTask({ partition: part, phone, pt: "快手" });
@@ -163,6 +161,7 @@ export async function runKsCliLogin({
     let pollTimer = null;
     let qrTimer = null;
     let deadlineTimer = null;
+    let verifying = false;
 
     const finish = async (code, message) => {
       if (settled) return;
@@ -175,11 +174,14 @@ export async function runKsCliLogin({
           const ses = electronSession.fromPartition(part);
           await ses.cookies.flushStore();
           ses.flushStorageData();
-        } catch (_) {}
+        } catch (error) {
+          code = 1;
+          message = `快手登录会话保存失败：${error.message}`;
+        }
       }
       try { if (browser) browser.disconnect(); } catch (_) {}
       try { if (win && !win.isDestroyed()) win.close(); } catch (_) {}
-      if (message) console.log(message);
+      if (message) (code === 0 ? console.log : console.error)(message);
       resolve(code);
     };
 
@@ -207,16 +209,30 @@ export async function runKsCliLogin({
       page = await pie.getPage(browser, win);
       if (show && !saveQrPngPath) win.show();
 
+      if (await getKsUserId(part)) {
+        await verifyPublishLogin(page, "快手");
+        await finish(0, "快手真实发布页验证成功，会话已保存。");
+        return;
+      }
       await openKsQrPanel(page);
 
       if (saveQrPngPath) {
-        const refreshQr = () => captureKsQr(page, saveQrPngPath).catch(() => false);
+        const refreshQr = () => !settled && !verifying && captureKsQr(page, saveQrPngPath).catch(() => false);
         setTimeout(refreshQr, CLI_LOGIN_QR_FIRST_DELAY_MS);
         qrTimer = setInterval(refreshQr, CLI_LOGIN_QR_REFRESH_MS);
       }
       pollTimer = setInterval(() => {
-        getKsUserId(part).then((userId) => {
-          if (userId) finish(0, "快手登录成功，会话已写入账号分区，可执行 cli publish。");
+        if (settled || verifying) return;
+        getKsUserId(part).then(async (userId) => {
+          if (!userId || settled || verifying) return;
+          verifying = true;
+          if (qrTimer) clearInterval(qrTimer);
+          try {
+            await verifyPublishLogin(page, "快手");
+            await finish(0, "快手登录成功，真实发布页验证通过，会话已保存。");
+          } catch (error) {
+            await finish(3, `快手登录后发布页验证失败：${error.message}`);
+          }
         }).catch((error) => console.error("快手登录状态检测失败:", error.message));
       }, 2000);
       deadlineTimer = setTimeout(() => {

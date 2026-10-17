@@ -32,7 +32,9 @@ function nowIso(): string {
 }
 
 function writeRecord(record: TaskRecord): void {
-  fs.writeFileSync(record.task_path, JSON.stringify(record, null, 2), "utf8");
+  const temporaryPath = `${record.task_path}.${crypto.randomBytes(4).toString("hex")}.tmp`;
+  fs.writeFileSync(temporaryPath, JSON.stringify(record, null, 2), "utf8");
+  fs.renameSync(temporaryPath, record.task_path);
 }
 
 function readRecord(taskPath: string): TaskRecord | null {

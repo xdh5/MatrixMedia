@@ -27,7 +27,7 @@ import { isCliMode, runCliMain } from "./cli";
 import { installMainProcessLogFile } from "./services/mainProcessLogFile";
 import { initializeElectronRuntime } from "./services/electronStartup";
 import { reportUsageTelemetry } from "./services/usageTelemetry";
-import { configureMatrixSessionData } from "./services/matrixDataPaths";
+import { configureMatrixSessionData, acquireMatrixSession } from "./services/matrixDataPaths";
 
 const cliMode = isCliMode(process.argv);
 
@@ -47,6 +47,14 @@ app.commandLine.appendSwitch("disable-features", "OutOfBlinkCors");
 
 async function startApplication() {
   try {
+    await acquireMatrixSession(app);
+    const parentPid = Number(process.env.MEDIA_PUBLISHER_PARENT_PID);
+    if (parentPid) {
+      setInterval(() => {
+        try { process.kill(parentPid, 0); }
+        catch (error) { if (error.code === "ESRCH") app.exit(1); }
+      }, 2000).unref();
+    }
     await initializeElectronRuntime({ app, pie });
     reportUsageTelemetry(app, "cli").catch(() => {});
     console.log("[startup] CLI 参数已识别，开始执行命令");

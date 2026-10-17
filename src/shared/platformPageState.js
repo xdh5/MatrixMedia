@@ -1,5 +1,7 @@
 "use strict";
 
+export const KUAISHOU_VIDEO_UPLOAD_SELECTOR = 'input[type="file"][accept*="video"], input[type="file"][accept*=".mp4"]';
+
 export function isPlatformLoginUrl(platform, currentUrl) {
   const pt = String(platform || "");
   const rawUrl = String(currentUrl || "");

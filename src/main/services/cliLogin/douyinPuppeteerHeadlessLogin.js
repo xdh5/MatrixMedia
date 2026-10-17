@@ -8,6 +8,7 @@ import puppeteerCore from "puppeteer-core";
 import { addExtra } from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import ptConfig from "../../config/ptConfig";
+import { verifyPublishLogin } from "./verifyPublishLogin.js";
 import {
   getDouyinLoginCaptureRectFromPuppeteerPage,
   tryReadAnimateQrImageBufferFromPage,
@@ -16,7 +17,6 @@ import {
 import { writeLoginQrPngFile } from "./terminalQrQrcodeTerminal.js";
 import { clearTerminalScreen } from "./qrBitmapToBlocks.js";
 import {
-  hasDouyinSession,
   normalizeDouyinPartition,
 } from "./douyinSessionUtil.js";
 import {
@@ -216,12 +216,6 @@ export async function runDouyinPuppeteerHeadlessLogin({
     return 1;
   }
   const part = normalizeDouyinPartition(partition);
-  if (await hasDouyinSession(part)) {
-    console.log(
-      "抖音：当前 partition 已存在登录 Cookie（passport_assist_user），无需再次登录。"
-    );
-    return 0;
-  }
 
   const useTerminalQr = Boolean(terminalQr && process.stdout.isTTY);
   if (terminalQr && !process.stdout.isTTY) {
@@ -238,9 +232,7 @@ export async function runDouyinPuppeteerHeadlessLogin({
 
   const ses = session.fromPartition(part);
   const partitionStoragePath = ses.getStoragePath();
-  const temporaryProfile = force
-    ? fs.mkdtempSync(path.join(os.tmpdir(), "media-publisher-douyin-login-"))
-    : null;
+  const temporaryProfile = fs.mkdtempSync(path.join(os.tmpdir(), "media-publisher-douyin-login-"));
   const clearTemporaryProfile = () => {
     if (!temporaryProfile) return;
     try {
@@ -311,6 +303,7 @@ export async function runDouyinPuppeteerHeadlessLogin({
   }
 
   let settled = false;
+  let verifying = false;
   return await new Promise((resolve) => {
     let pollTimer = null;
     let qrTimer = null;
@@ -345,27 +338,31 @@ export async function runDouyinPuppeteerHeadlessLogin({
           "s）…"
       );
       pollTimer = setInterval(() => {
-        if (settled) return;
+        if (settled || verifying) return;
         hasPassportCookieOnPage(page)
           .then(async (ok) => {
-            if (ok && !settled) {
+            if (ok && !settled && !verifying) {
+              verifying = true;
+              if (qrTimer) clearInterval(qrTimer);
+              await verifyPublishLogin(page, "抖音");
               await syncPageCookiesToElectronSession(page, ses);
               finish(0, {
                 clearTerminal: useTerminalQr,
-                log: "抖音登录成功，Cookie 已同步到 Electron partition，可执行 cli publish。",
+                log: "抖音登录成功，真实发布页验证通过，会话已保存。",
               });
             }
           })
           .catch((error) => {
             console.error("同步抖音登录 Cookie 失败:", error && error.message);
+            finish(3);
           });
       }, 2000);
       qrTimer = setInterval(() => {
-        if (settled) return;
+        if (settled || verifying) return;
         refreshLoginQrFromPuppeteerPage(page, paintOpts).catch(() => {});
       }, CLI_LOGIN_QR_REFRESH_MS);
       setTimeout(() => {
-        if (!settled) {
+        if (!settled && !verifying) {
           refreshLoginQrFromPuppeteerPage(page, paintOpts).catch(() => {});
         }
       }, CLI_LOGIN_QR_FIRST_DELAY_MS);

@@ -1,5 +1,6 @@
 import path from "path";
 import maybeClosePublishWindow from "./closeWindow.js";
+import { KUAISHOU_VIDEO_UPLOAD_SELECTOR } from "../../../shared/platformPageState.js";
 import {
   isCreativeStatementNone,
   resolveKsCreativeStatementLabel,
@@ -361,7 +362,7 @@ export default async function (page, data, window,event) {
 
   console.log(data);
   try {
-    let sel = '#joyride-wrapper input[type="file"]';
+    const sel = KUAISHOU_VIDEO_UPLOAD_SELECTOR;
     await page.waitForSelector(sel, { timeout: WAIT_SELECTOR_APPEAR_MS });
     const uploadInputs = await page.$(sel);
     await uploadInputs.uploadFile(path.resolve(data.filePath));

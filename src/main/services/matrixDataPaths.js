@@ -74,5 +74,24 @@ export function configureMatrixSessionData(app) {
   const dataDir = path.join(resolveMatrixRoot(app), "data", group);
   fs.mkdirSync(dataDir, { recursive: true });
   app.setPath("sessionData", dataDir);
+  const runtimeDir = path.join(dataDir, "runtime");
+  fs.mkdirSync(runtimeDir, { recursive: true });
+  app.setPath("userData", runtimeDir);
   return dataDir;
+}
+
+/** 同一账号组独占浏览器配置；进程退出时操作系统自动释放锁。 */
+export async function acquireMatrixSession(app) {
+  const deadline = Date.now() + 60000;
+  let reported = false;
+  while (!app.requestSingleInstanceLock()) {
+    if (!reported) {
+      console.log("[startup] 当前账号组正在登录或发布，等待浏览器配置释放。");
+      reported = true;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error("当前账号组仍有登录或发布任务运行，请等待任务完成后再试；无需重新扫码");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
 }

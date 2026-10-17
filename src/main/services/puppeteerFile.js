@@ -212,6 +212,7 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
   let activeWin = null;
   let autoCloseTimer = null;
   let actionCheckTimer = null;
+  let progressTimer = null;
   const retryDelay = 1000;
 
   const safeReply = (channel, payload) => {
@@ -225,6 +226,10 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
   };
 
   const cleanupTaskResources = () => {
+    if (progressTimer) {
+      clearInterval(progressTimer);
+      progressTimer = null;
+    }
     if (actionCheckTimer) {
       clearTimeout(actionCheckTimer);
       actionCheckTimer = null;
@@ -541,6 +546,44 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
       activeWin = win;
       activeBrowser = browser;
       openPublishWindows.add(win);
+      let lastProgressAt = Date.now();
+      let lastPageState = "";
+      let samplingProgress = false;
+      const failStalledTask = (message) => {
+        if (finished || activeWin !== win) return;
+        safeReply("puppeteerFile-done", {
+          ...data, status: false, message, outcome: "unknown", needsAttention: true,
+        });
+        finishOnce();
+        win._mmClosedByProgram = true;
+        if (!win.isDestroyed()) win.destroy();
+      };
+      win.webContents.once("render-process-gone", (_event, details) => {
+        failStalledTask(`${data.pt}浏览器渲染进程退出：${details.reason}，请先核对作品管理后再重发`);
+      });
+      if (progressTimer) clearInterval(progressTimer);
+      progressTimer = setInterval(() => {
+        if (finished || activeWin !== win) return;
+        if (Date.now() - lastProgressAt >= 5 * 60 * 1000) {
+          failStalledTask(`${data.pt}页面连续5分钟无进展，已释放浏览器；发布结果待核对，请先检查作品管理`);
+          return;
+        }
+        if (samplingProgress) return;
+        samplingProgress = true;
+        page.evaluate(() => {
+          const root = document.querySelector("wujie-app.wujie_iframe")?.shadowRoot || document;
+          const progress = [...root.querySelectorAll("[role='progressbar'], progress, [class*='progress'], [class*='upload']")]
+            .map((node) => [node.innerText, node.getAttribute("aria-valuenow"), node.value, node.style.width]);
+          const controls = [...root.querySelectorAll("button, [role='alert'], video")]
+            .map((node) => [node.innerText, node.disabled, node.currentSrc]);
+          return JSON.stringify([location.href, progress, controls]);
+        }).then((state) => {
+          if (activeWin === win && state !== lastPageState) {
+            lastPageState = state;
+            lastProgressAt = Date.now();
+          }
+        }).catch(() => {}).finally(() => { samplingProgress = false; });
+      }, 5000);
 
       // 注入反自动化检测脚本（在页面 JS 执行前生效）
       // 解决小红书等平台判定 Electron 为 "AI 自动化" 的问题
@@ -850,13 +893,16 @@ async function doUpload(data, transport, queueDone, runtimeTask) {
               );
               if (!sessionProbe.ok) {
                 const supportsQrLogin =
-                  data.pt === "抖音" || data.pt === "视频号";
-                const message = `${sessionProbe.reason}，请重新登录后再试`;
+                  ["抖音", "快手", "头条", "视频号"].includes(data.pt);
+                const message = sessionProbe.loginRequired
+                  ? `${sessionProbe.reason}，请重新登录后再试`
+                  : sessionProbe.reason;
                 console.error(
                   `[auth] ${message}: ${sessionProbe.currentUrl || currentUrl}`
                 );
-                safeReply("puppeteer-noLogin", {
+                safeReply(sessionProbe.loginRequired ? "puppeteer-noLogin" : "puppeteerFile-done", {
                   ...data,
+                  status: false,
                   currentUrl: sessionProbe.currentUrl || currentUrl,
                   message,
                   realSessionProbe: true,

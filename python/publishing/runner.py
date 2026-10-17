@@ -8,9 +8,10 @@ import re
 import shutil
 import subprocess
 import sys
+import signal
 from pathlib import Path
 
-TIMEOUT_SECONDS = 2400
+TIMEOUT_SECONDS = 4 * 60 * 60 + 120
 
 
 def matrix_root() -> Path:
@@ -89,20 +90,32 @@ def run_browser_publish(arguments: list[str]) -> dict:
     prefix, cwd = electron_command()
     env = dict(os.environ)
     env.pop("ELECTRON_RUN_AS_NODE", None)
+    env["MEDIA_PUBLISHER_PARENT_PID"] = env.get("MEDIA_PUBLISHER_OWNER_PID") or str(os.getpid())
     log_path = _latest_log()
     log_offset = log_path.stat().st_size if log_path else 0
     try:
-        result = subprocess.run(
+        process = subprocess.Popen(
             [*prefix, *arguments],
             cwd=cwd,
             env=env,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=TIMEOUT_SECONDS,
-            check=False,
+            start_new_session=os.name != "nt",
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
+        try:
+            stdout, stderr = process.communicate(timeout=TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            else:
+                os.killpg(process.pid, signal.SIGKILL)
+            process.communicate()
+            raise RuntimeError("发布超时，已清理本次浏览器进程树；结果待核对，请检查平台作品管理后再重发")
+        result = subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
     except (OSError, subprocess.SubprocessError) as exc:
         raise RuntimeError(f"运行 media-publisher CLI 失败：{exc}") from exc
     payload = _last_json(result.stdout) or _last_json(result.stderr)

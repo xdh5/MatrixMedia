@@ -6,6 +6,7 @@ import puppeteerCore from "puppeteer-core";
 import { addExtra } from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import ptConfig from "../../config/ptConfig";
+import { verifyPublishLogin } from "./verifyPublishLogin.js";
 import {
   clearTerminalScreen,
   paintLoginQrToTerminalFromPuppeteerPage,
@@ -64,11 +65,6 @@ export async function runDouyinCliLogin({
     });
   }
 
-  if (await hasDouyinSession(part)) {
-    console.log("抖音：当前 partition 已存在登录 Cookie（passport_assist_user），无需再次登录。");
-    return 0;
-  }
-
   const useTerminalQr = Boolean(terminalQr && process.stdout.isTTY);
   if (terminalQr && !process.stdout.isTTY) {
     console.warn(
@@ -83,6 +79,7 @@ export async function runDouyinCliLogin({
 
   return await new Promise(resolve => {
     let settled = false;
+    let verifying = false;
     let pollTimer = null;
     let qrTimer = null;
     let deadlineTimer = null;
@@ -111,8 +108,9 @@ export async function runDouyinCliLogin({
           const ses = electronSession.fromPartition(part);
           await ses.cookies.flushStore();
           ses.flushStorageData();
-        } catch (_) {
-          // 忽略
+        } catch (error) {
+          code = 1;
+          opts.log = `抖音登录会话保存失败：${error.message}`;
         }
       }
 
@@ -138,7 +136,7 @@ export async function runDouyinCliLogin({
         clearTerminalScreen();
       }
       if (opts.log) {
-        console.log(opts.log);
+        (code === 0 ? console.log : console.error)(opts.log);
       }
       resolve(code);
     };
@@ -206,6 +204,11 @@ export async function runDouyinCliLogin({
       }
 
       const paintOpts = { partitionLabel: part, saveQrPngPath };
+      if (await hasDouyinSession(part)) {
+        await verifyPublishLogin(piePage, "抖音");
+        await finish(0, { log: "抖音真实发布页验证成功，会话已保存。" });
+        return;
+      }
       const shouldPaintQr = useTerminalQr || Boolean(saveQrPngPath);
 
       if (shouldPaintQr) {
@@ -219,11 +222,11 @@ export async function runDouyinCliLogin({
           console.log("二维码将写入 PNG:", saveQrPngPath);
         }
         qrTimer = setInterval(() => {
-          if (settled || !piePage) return;
+          if (settled || verifying || !piePage) return;
           paintLoginQrToTerminalFromPuppeteerPage(piePage, paintOpts).catch(() => {});
         }, CLI_LOGIN_QR_REFRESH_MS);
         setTimeout(() => {
-          if (!settled && piePage) {
+          if (!settled && !verifying && piePage) {
             paintLoginQrToTerminalFromPuppeteerPage(piePage, paintOpts).catch(() => {});
           }
         }, CLI_LOGIN_QR_FIRST_DELAY_MS);
@@ -232,13 +235,21 @@ export async function runDouyinCliLogin({
       }
 
       pollTimer = setInterval(() => {
+        if (settled || verifying) return;
         hasDouyinSession(part)
-          .then(ok => {
-            if (ok && !settled) {
-              finish(0, {
-                clearTerminal: true,
-                log: "抖音登录成功，会话已写入 partition，可执行 cli publish。",
-              });
+          .then(async ok => {
+            if (ok && !settled && !verifying) {
+              verifying = true;
+              if (qrTimer) clearInterval(qrTimer);
+              try {
+                await verifyPublishLogin(piePage, "抖音");
+                await finish(0, {
+                  clearTerminal: true,
+                  log: "抖音登录成功，真实发布页验证通过，会话已保存。",
+                });
+              } catch (error) {
+                await finish(3, { log: `抖音登录后发布页验证失败：${error.message}` });
+              }
             }
           })
           .catch(e => {

@@ -445,6 +445,10 @@ async function fillSphTextAsBefore(page, description, shortTitle, fields = {}) {
       if (!target) throw new Error("未找到视频号描述输入框真实节点");
       target.focus();
     });
+    await page.keyboard.down("Control");
+    await page.keyboard.press("KeyA");
+    await page.keyboard.up("Control");
+    await page.keyboard.press("Backspace");
     await page.keyboard.type(description, { delay: 50 });
   }
 
@@ -465,6 +469,10 @@ async function fillSphTextAsBefore(page, description, shortTitle, fields = {}) {
       if (!target) throw new Error("未找到视频号短标题输入框真实节点");
       target.focus();
     });
+    await page.keyboard.down("Control");
+    await page.keyboard.press("KeyA");
+    await page.keyboard.up("Control");
+    await page.keyboard.press("Backspace");
     await page.keyboard.type(shortTitle, { delay: 50 });
   }
 }
@@ -479,12 +487,13 @@ async function readSphTextState(page, title, tags, shortTitle) {
     const descriptionText = String(
       (descriptionBox && descriptionBox.textContent) || ""
     ).replace(/\s+/g, " ");
+    const normalize = (text) => String(text || "").replace(/[#＃\s\u200b]/g, "");
     const tagList = String(expectedTags || "")
       .split(/\s+/)
       .filter(Boolean);
     const descriptionOk =
-      descriptionText.includes(expectedTitle) &&
-      tagList.every((tag) => descriptionText.includes(tag));
+      normalize(descriptionText).includes(normalize(expectedTitle)) &&
+      tagList.every((tag) => normalize(descriptionText).includes(normalize(tag)));
     const shortInput = root.querySelector(
       'input[placeholder="填写短标题有机会获得更多流量"]'
     );
@@ -628,8 +637,8 @@ export default async function (page, data, window, event, onFinish) {
 
     let textState = await readSphTextState(
       page,
-      data.data.bdText || data.data.bt2,
-      data.data.bq,
+      description,
+      "",
       normalizedShortTitle
     );
     if (!textState.descriptionOk || !textState.shortTitleOk) {
@@ -642,8 +651,8 @@ export default async function (page, data, window, event, onFinish) {
       });
       textState = await readSphTextState(
         page,
-        data.data.bdText || data.data.bt2,
-        data.data.bq,
+        description,
+        "",
         normalizedShortTitle
       );
     }

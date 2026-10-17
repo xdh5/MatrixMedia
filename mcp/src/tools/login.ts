@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import type { ChildProcess } from "node:child_process";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
-import { spawnCli, runMatrixPublish } from "../runner.js";
+import { spawnCli, runMatrixPublish, stopCliProcess } from "../runner.js";
 
 interface LoginPlatform {
   code: string;
@@ -101,7 +101,7 @@ function stopSession(loginId: string): void {
   }
   try {
     if (session.exitCode === null) {
-      session.child.kill("SIGTERM");
+      stopCliProcess(session.child);
     }
   } catch {
     /* ignore */
@@ -218,9 +218,6 @@ export async function handleLogin(args: Record<string, unknown>): Promise<McpCon
   ];
   if (force) {
     cliArgs.push("--force");
-  }
-  if (spec.code === "douyin") {
-    cliArgs.push("--puppeteer-headless");
   }
   const child = spawnCli(cliArgs);
   const session: LoginSession = {
